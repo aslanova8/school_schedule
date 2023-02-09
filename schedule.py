@@ -3,6 +3,7 @@ from tkinter import messagebox
 from tkinter import *
 from tkinter import filedialog
 from tkinter import ttk
+import genetic_algoritm.genetic_operators as ga
 
 
 class Schedule(Frame):
@@ -30,9 +31,10 @@ class Schedule(Frame):
         tab_control = ttk.Notebook(self)
         tab_files = Frame(tab_control)  # Вкладка с загрузками файлов
         tab_parameters = Frame(tab_control)  # Вкладка с параметрами расписания
-
+        tab_schedule = Frame(tab_control)  # Вкладка с расписанием
         tab_control.add(tab_files, text='Начальные данные')
         tab_control.add(tab_parameters, text='Параметры расписания')
+        tab_control.add(tab_schedule, text='Расписание')
         tab_control.pack(expand=1, fill="both")
 
         # Добавление фреймов на первую вкладку
@@ -76,7 +78,7 @@ class Schedule(Frame):
             if not Schedule.df_academic_plan.empty:
                 # TODO : исправить вывод сообщения
                 label_loaded_academic_plan = Label(frame_academic_plan, fg='Green',
-                                              text=f'Загружен план обучения')
+                                                   text=f'Загружен план обучения')
                 label_loaded_academic_plan.pack(side=LEFT, padx=10, pady=10)
 
         def load_teachers(self):
@@ -113,6 +115,9 @@ class Schedule(Frame):
         quit_button = Button(self, text="Закрыть", command=lambda: self.quit())
         quit_button.pack(side=RIGHT, padx=10, pady=10)
 
+        ga_button = Button(tab_schedule, text="Создать расписание", command=lambda: self.create_schedule())
+        ga_button.pack(side=BOTTOM, padx=10, pady=10)
+
     def load_df(self):
         fn = filedialog.Open(self.parent, filetypes=[('Excel files', '.xlsx .xls')]).show()
         if fn == '':
@@ -128,8 +133,14 @@ class Schedule(Frame):
         if messagebox.askyesno("Выйти", "Закрыть программу?"):
             self.parent.destroy()
 
-    def GA(self):
-        teacher_count = Schedule.df_teachers.shape[0]
+    def create_schedule(self):
+        if Schedule.df_teachers.empty or Schedule.df_audiences.empty or Schedule.df_academic_plan.empty or \
+                Schedule.df_calls.empty or Schedule.df_audiences_lessons.empty:
+            if messagebox.showinfo("Загрузить", "Введите все начальные данные"):
+                return
+        temp = ga.get_empty_schedule(Schedule.df_calls, 5)
+        # TODO: прописать остальные этапы генетического алгоритма
+
 
 
 def main():

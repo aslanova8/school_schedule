@@ -18,7 +18,6 @@ class Schedule(Frame):
 
     def __init__(self, parent):
         Frame.__init__(self, parent)
-
         self.parent = parent  # Сохранение ссылки на корневое окно
         self.init_ui()  # Загружаем пользовательский интерфейс
 
@@ -138,7 +137,11 @@ class Schedule(Frame):
                 Schedule.df_calls.empty or Schedule.df_audiences_lessons.empty:
             if messagebox.showinfo("Загрузить", "Введите все начальные данные"):
                 return
-        temp = ga.get_empty_schedule(Schedule.df_calls, 5)
+        teacher_count = Schedule.df_teachers.shape
+        first_schedule = ga.get_empty_schedule(Schedule.df_calls, 5)
+        first_schedule = ga.create_first_population(first_schedule, Schedule.df_academic_plan, Schedule.df_teachers,
+                                                    Schedule.df_audiences_lessons, Schedule.df_audiences)
+
         # TODO: прописать остальные этапы генетического алгоритма
 
 

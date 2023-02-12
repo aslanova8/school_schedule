@@ -114,15 +114,18 @@ class Schedule(Frame):
         quit_button = Button(self, text="Закрыть", command=lambda: self.quit())
         quit_button.pack(side=RIGHT, padx=10, pady=10)
 
-        ga_button = Button(tab_schedule, text="Создать расписание", command=lambda: self.create_schedule())
+        ga_button = Button(tab_schedule, text="Создать расписание",
+                           command=lambda: self.create_schedule(tab_files, tab_parameters, tab_schedule))
         ga_button.pack(side=BOTTOM, padx=10, pady=10)
+        return
 
     def load_df(self):
         fn = filedialog.Open(self.parent, filetypes=[('Excel files', '.xlsx .xls')]).show()
+        # (("Template files", "*.tplate")
+        #  , ("HTML files", "*.html;*.htm")
+        #  , ("All files", "*.*")))
+        # TODO: Добавить другие типы файлов
         if fn == '':
-            # (("Template files", "*.tplate")
-            #  , ("HTML files", "*.html;*.htm")
-            #  , ("All files", "*.*")))
             return
         else:
             df = pd.read_excel(fn)
@@ -132,18 +135,49 @@ class Schedule(Frame):
         if messagebox.askyesno("Выйти", "Закрыть программу?"):
             self.parent.destroy()
 
-    def create_schedule(self):
+    def create_schedule(self, tab_files, tab_parameters, tab_schedule):
         if Schedule.df_teachers.empty or Schedule.df_audiences.empty or Schedule.df_academic_plan.empty or \
                 Schedule.df_calls.empty or Schedule.df_audiences_lessons.empty:
             if messagebox.showinfo("Загрузить", "Введите все начальные данные"):
                 return
-        teacher_count = Schedule.df_teachers.shape
         first_schedule = ga.get_empty_schedule(Schedule.df_calls, 5)
         first_schedule = ga.create_first_population(first_schedule, Schedule.df_academic_plan, Schedule.df_teachers,
                                                     Schedule.df_audiences_lessons, Schedule.df_audiences)
-
+        temp = 0
         # TODO: прописать остальные этапы генетического алгоритма
+        self.show_schedule(first_schedule, tab_schedule)
 
+    @staticmethod
+    def show_schedule(schedule: dict, tab):
+        distinct_classes = sorted(Schedule.df_academic_plan['class'].unique())
+        data = [['' for __ in range(len(distinct_classes))] for _ in range(len(schedule))]
+        interval_num = 0
+        for interval in schedule:
+            for audience in schedule[interval]:
+                school_class, lesson, teacher = [_ for _ in schedule[interval][audience]]
+                item = str(lesson) + ' ' + str(teacher) + ' ' + str(audience)
+                data[interval_num][distinct_classes.index(school_class)] = item
+            interval_num += 1
+        table = []
+        interval_num = 0
+        # table.append(('',)+tuple(distinct_classes))
+
+        for interval in schedule:
+            table.append((interval,) + tuple(data[interval_num]))
+            interval_num += 1
+
+        columns = ('',) + tuple(distinct_classes)
+
+        tree = ttk.Treeview(tab, columns=columns, show="headings")
+        tree.pack(fill=BOTH, expand=1)
+
+        tree.heading("", text="", anchor=W)
+        for i in distinct_classes:
+            tree.heading(str(i), text=str(i), anchor=W)
+
+        for interval in table:
+            tree.insert("", END, values=interval)
+        return
 
 
 def main():

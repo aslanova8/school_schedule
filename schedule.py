@@ -3,11 +3,13 @@ from tkinter import messagebox
 from tkinter import *
 from tkinter import filedialog
 from tkinter import ttk
+from tkinter.ttk import Combobox
 import genetic_algoritm.genetic_operators as ga
 
 
 class Schedule(Frame):
     # Cоздание атрибутов класса
+    number_of_days_in_week = 5
 
     # Датафреймы с вводными для расписания
     df_teachers = pd.DataFrame
@@ -53,7 +55,7 @@ class Schedule(Frame):
         frame_calls = LabelFrame(tab_files, text="Расписание звонков", relief=RAISED, borderwidth=1)
         frame_calls.pack(fill=BOTH, expand=True)
 
-        # Создание кнопкок для вызова диалогового окна для загрузки
+        # Создание кнопок для вызова диалогового окна для загрузки
         load_button_a_p = Button(frame_academic_plan, text="Загрузить", command=lambda: load_academic_plan(self))
         load_button_a_p.pack(side=RIGHT, padx=10, pady=10)
 
@@ -110,14 +112,33 @@ class Schedule(Frame):
                                            text=f'Загружены данные o звонках')
                 label_loaded_calls.pack(side=LEFT, padx=10, pady=10)
 
+
+
+        # Параметры расписания
+
+        # Количество учебных дней в неделе
+        tab_parameters
+        combo_days_in_week = Combobox(tab_parameters)
+        combo_days_in_week['values'] = (4, 5, 6)
+        combo_days_in_week.current(1)  # Вариант по умолчанию
+        combo_days_in_week.pack(side=TOP, padx=10, pady=10)
+
+        # Кнопка загрузки параметров
+        def load_parameters_def(self):
+            Schedule.number_of_days_in_week = int(combo_days_in_week.get())
+        load_parameters = Button(tab_parameters, text="Сохранить параметры", command=lambda: load_parameters_def(self))
+        load_parameters.pack(side=BOTTOM, padx=10, pady=10)
+
         # Выход из программы
         quit_button = Button(self, text="Закрыть", command=lambda: self.quit())
         quit_button.pack(side=RIGHT, padx=10, pady=10)
 
+        # Создание расписания
         ga_button = Button(tab_schedule, text="Создать расписание",
                            command=lambda: self.create_schedule(tab_files, tab_parameters, tab_schedule))
         ga_button.pack(side=BOTTOM, padx=10, pady=10)
         return
+
 
     def load_df(self):
         fn = filedialog.Open(self.parent, filetypes=[('Excel files', '.xlsx .xls')]).show()
@@ -140,7 +161,7 @@ class Schedule(Frame):
                 Schedule.df_calls.empty or Schedule.df_audiences_lessons.empty:
             if messagebox.showinfo("Загрузить", "Введите все начальные данные"):
                 return
-        first_schedule = ga.get_empty_schedule(Schedule.df_calls, 5)
+        first_schedule = ga.get_empty_schedule(Schedule.df_calls, Schedule.number_of_days_in_week)
         first_schedule = ga.create_first_population(first_schedule, Schedule.df_academic_plan, Schedule.df_teachers,
                                                     Schedule.df_audiences_lessons, Schedule.df_audiences)
         temp = 0

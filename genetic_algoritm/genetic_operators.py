@@ -28,6 +28,7 @@ def get_empty_schedule(df_intervals: pd.DataFrame, week_length: int) -> dict:
 
 def create_first_population(population: dict, academic_plan_df: pd.DataFrame,
                             teachers_df: pd.DataFrame, aud_type_df: pd.DataFrame, audiences_df: pd.DataFrame) -> dict:
+    # TODO add documentation
     for index, row in academic_plan_df.iterrows():
         # Формирование ячейки расписания
         temp = [row['class'], row['lesson']]

@@ -77,7 +77,6 @@ class Schedule(Frame):
         def load_academic_plan(self):
             Schedule.df_academic_plan = self.load_df()
             if not Schedule.df_academic_plan.empty:
-                # TODO : исправить вывод сообщения
                 label_loaded_academic_plan = Label(frame_academic_plan, fg='Green',
                                                    text=f'Загружен план обучения')
                 label_loaded_academic_plan.pack(side=LEFT, padx=10, pady=10)
@@ -166,10 +165,10 @@ class Schedule(Frame):
                                                     Schedule.df_audiences_lessons, Schedule.df_audiences)
         temp = 0
         # TODO: прописать остальные этапы генетического алгоритма
-        self.show_schedule(first_schedule, tab_schedule)
+        self.show_schedule(tab_schedule, first_schedule)
 
     @staticmethod
-    def show_schedule(schedule: dict, tab):
+    def show_schedule(tab, schedule: dict):
         distinct_classes = sorted(Schedule.df_academic_plan['class'].unique())
         data = [['' for __ in range(len(distinct_classes))] for _ in range(len(schedule))]
         interval_num = 0
@@ -181,7 +180,6 @@ class Schedule(Frame):
             interval_num += 1
         table = []
         interval_num = 0
-        # table.append(('',)+tuple(distinct_classes))
 
         for interval in schedule:
             table.append((interval,) + tuple(data[interval_num]))

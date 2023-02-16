@@ -28,8 +28,19 @@ def get_empty_schedule(df_intervals: pd.DataFrame, week_length: int) -> dict:
 
 def create_first_population(population: dict, academic_plan_df: pd.DataFrame,
                             teachers_df: pd.DataFrame, aud_type_df: pd.DataFrame, audiences_df: pd.DataFrame) -> dict:
-    # TODO add documentation
+    """
+    Функция возвращает расписание, в котором сохранена логика расписания между классами и кабинетами,
+    но не между учителями
+    :param population: Пустое расписание
+    :param academic_plan_df: Данные для заполнения пустого шаблона
+    :param teachers_df:
+    :param aud_type_df:
+    :param audiences_df:
+    :return: population - первый вариант расписания
+    """
     for index, row in academic_plan_df.iterrows():
+        # Количество данных уроков на неделе
+        count = row['count']
         # Формирование ячейки расписания
         temp = [row['class'], row['lesson']]
         # Выбор типа аудитории
@@ -38,21 +49,22 @@ def create_first_population(population: dict, academic_plan_df: pd.DataFrame,
         # Выбор учителя
         possible_teachers = teachers_df.loc[teachers_df['lesson'] == row['lesson']]['teacher'].to_list()
         temp.append(possible_teachers[random.randrange(len(possible_teachers))])
-        look_for_item = 1
-        interval = random.sample(population.items(), 1)[0][0]
-        while look_for_item:
-            for audience in possible_audiences:
-                if audience in population[interval]:
-                    if population[interval][audience][0] == temp[0]:
-                        interval = random.sample(population.items(), 1)[0][0]
-                        break
+        for _ in range(count):
+            look_for_item = 1
+            interval = random.sample(population.items(), 1)[0][0]
+            while look_for_item and count:
+                for audience in possible_audiences:
+                    if audience in population[interval]:
+                        if population[interval][audience][0] == temp[0]:
+                            interval = random.sample(population.items(), 1)[0][0]
+                            break
+                        else:
+                            continue
                     else:
-                        continue
+                        population[interval][audience] = temp
+                        look_for_item = 0
+                        break
                 else:
-                    population[interval][audience] = temp
-                    look_for_item = 0
-                    break
-            else:
-                interval = random.sample(population.items(), 1)[0][0]
+                    interval = random.sample(population.items(), 1)[0][0]
 
     return population

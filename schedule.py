@@ -111,8 +111,6 @@ class Schedule(Frame):
                                            text=f'Загружены данные o звонках')
                 label_loaded_calls.pack(side=LEFT, padx=10, pady=10)
 
-
-
         # Параметры расписания
 
         # Количество учебных дней в неделе
@@ -125,6 +123,7 @@ class Schedule(Frame):
         # Кнопка загрузки параметров
         def load_parameters_def(self):
             Schedule.number_of_days_in_week = int(combo_days_in_week.get())
+
         load_parameters = Button(tab_parameters, text="Сохранить параметры", command=lambda: load_parameters_def(self))
         load_parameters.pack(side=BOTTOM, padx=10, pady=10)
 
@@ -137,7 +136,6 @@ class Schedule(Frame):
                            command=lambda: self.create_schedule(tab_files, tab_parameters, tab_schedule))
         ga_button.pack(side=BOTTOM, padx=10, pady=10)
         return
-
 
     def load_df(self):
         fn = filedialog.Open(self.parent, filetypes=[('Excel files', '.xlsx .xls')]).show()
@@ -169,6 +167,7 @@ class Schedule(Frame):
 
     @staticmethod
     def show_schedule(tab, schedule: dict):
+
         distinct_classes = sorted(Schedule.df_academic_plan['class'].unique())
         data = [['' for __ in range(len(distinct_classes))] for _ in range(len(schedule))]
         interval_num = 0
@@ -196,6 +195,16 @@ class Schedule(Frame):
 
         for interval in table:
             tree.insert("", END, values=interval)
+
+        def save_schedule_def(schedule):
+            df = pd.DataFrame(schedule)
+            df.columns = [''] + distinct_classes
+            # TODO: Добавить другие типы файлов
+            df.to_excel('./schedule.xlsx', sheet_name='Budgets', index=False)
+
+        # Кнопка загрузки
+        save_schedule = Button(tab, text='Сохранить', command=lambda: save_schedule_def(table))
+        save_schedule.pack(fill=NONE, expand=1)
         return
 
 

@@ -5,13 +5,14 @@ from tkinter import *
 from tkinter import filedialog
 from tkinter import ttk
 from tkinter.ttk import Combobox
+from tkinter import IntVar
 import genetic_algoritm.genetic_operators as ga
 
 
 class Schedule(Frame):
     # Cоздание атрибутов класса
     number_of_days_in_week = 5
-
+    second_shift = 0
     # Датафреймы с вводными для расписания
     df_teachers = pd.DataFrame
     df_audiences = pd.DataFrame
@@ -22,7 +23,7 @@ class Schedule(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         self.parent = parent  # Сохранение ссылки на корневое окно
-        self.init_ui()  # Загружаем пользовательский интерфейс
+        self.init_ui()  # Загрузка пользовательского интерфейса
 
     def init_ui(self):
         # Заголовок окна
@@ -120,14 +121,14 @@ class Schedule(Frame):
         combo_days_in_week.pack(side=TOP, padx=10, pady=10)
 
         # Вторая смена
-        second_shift = IntVar()
-        second_shift_checkbutton = ttk.Checkbutton(tab_parameters, text="Вторая смена", variable=second_shift)
+        second_shift_current = IntVar()
+        second_shift_checkbutton = ttk.Checkbutton(tab_parameters, text="Вторая смена", variable=second_shift_current)
         second_shift_checkbutton.pack(side=TOP, padx=10, pady=10)
 
         # Кнопка загрузки параметров
         def load_parameters_def(self):
             Schedule.number_of_days_in_week = int(combo_days_in_week.get())
-
+            Schedule.second_shift = second_shift_current
         load_parameters = Button(tab_parameters, text="Сохранить параметры", command=lambda: load_parameters_def(self))
         load_parameters.pack(side=BOTTOM, padx=10, pady=10)
 
@@ -155,7 +156,8 @@ class Schedule(Frame):
                 return
         first_schedule = ga.get_empty_schedule(Schedule.df_rings, Schedule.number_of_days_in_week)
         first_schedule = ga.create_first_population(first_schedule, Schedule.df_academic_plan, Schedule.df_teachers,
-                                                    Schedule.df_audiences_lessons, Schedule.df_audiences)
+                                                    Schedule.df_audiences_lessons, Schedule.df_audiences,
+                                                    Schedule.number_of_days_in_week, Schedule.second_shift)
         # TODO: прописать остальные этапы генетического алгоритма
         self.show_schedule(tab_schedule, frame_schedule, first_schedule)
 
@@ -183,10 +185,12 @@ class Schedule(Frame):
         columns = ('',) + tuple(distinct_classes)
 
         tree = ttk.Treeview(frame, columns=columns, show="headings")
-
-        tree.heading("", text="", anchor=W)
+        # TODO: увеличить размер ячейки
+        # TODO: отображение интервалов поверх таблицы при горизонтальной прокрутке
+        tree.heading("", text="", anchor=CENTER)
         for i in distinct_classes:
-            tree.heading(str(i), text=str(i), anchor=W)
+            # tree.column(str(i), anchor=CENTER, width=70)
+            tree.heading(str(i), text=str(i), anchor=CENTER)
 
         for interval in table:
             tree.insert("", END, values=interval)

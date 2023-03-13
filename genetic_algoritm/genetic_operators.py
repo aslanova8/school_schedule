@@ -80,6 +80,7 @@ def create_first_population(population: dict, academic_plan_df: pd.DataFrame, te
         # Выбор типа аудитории
         required_type_audience = aud_type_df.loc[aud_type_df['lesson'] == row['lesson']].iloc[0]['type']
         possible_audiences = audiences_df.loc[audiences_df['type'] == required_type_audience]['audience'].to_list()
+        random.shuffle(possible_audiences)
         # Выбор учителя
         possible_teachers = teachers_df.loc[teachers_df['lesson'] == row['lesson']]['teacher'].to_list()
         temp.append(possible_teachers[random.randrange(len(possible_teachers))])

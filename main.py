@@ -20,12 +20,17 @@ class App(Frame):
     df_rings = pd.DataFrame
     df_academic_plan = pd.DataFrame
 
+    # Расписание на вывод
     schedule_obj = ga.Schedule
 
     def __init__(self, parent):
         Frame.__init__(self, parent)
-        self.parent = parent  # Сохранение ссылки на корневое окно
-        self.init_ui()  # Загрузка пользовательского интерфейса
+
+        # Сохранение ссылки на корневое окно
+        self.parent = parent
+
+        # Загрузка пользовательского интерфейса
+        self.init_ui()
 
     def init_ui(self):
         """
@@ -108,23 +113,31 @@ class App(Frame):
         label_loaded_audiences_lessons.pack(side=LEFT, padx=10, pady=10)
 
         def load_df(df: str):
+            """
+            Загрузка файлов
+            :param df:
+            :return:
+            """
+
+            # Создаем команды для определенных файлов
             str_save = 'App.df_' + df + ' = pd.read_excel(fn)'
             str_message = 'label_loaded_' + df + ".configure(fg='Green')"
             str_load = 'label_loaded_' + df + ".configure(fg='#f0f0f0')"
 
-            # TODO: Разобраться, почему без этого не работают лейблы
+            # Получаем доступ к уже инициализированным лейблам
             label_loaded_academic_plan.configure()
             label_loaded_teachers.configure()
             label_loaded_audiences.configure()
             label_loaded_rings.configure()
             label_loaded_audiences_lessons.configure()
 
+            # Загрузка
             exec(str_load)
             fn = filedialog.Open(self.parent, filetypes=[('Excel files', '.xlsx .xls')]).show()
+            # TODO: Добавить другие типы файлов
             # (("Template files", "*.tplate")
             #  , ("HTML files", "*.html;*.htm")
             #  , ("All files", "*.*")))
-            # TODO: Добавить другие типы файлов
             if fn == '':
                 return
             else:
@@ -132,7 +145,7 @@ class App(Frame):
                 exec(str_message)
 
         # 2.
-        # Параметры расписания
+        # Моделирование параметров расписания
 
         # Количество учебных дней в неделе
         label_days_in_week = Label(tab_parameters, text='Количество учебных дней в неделе')
@@ -147,12 +160,18 @@ class App(Frame):
         second_shift_checkbutton = ttk.Checkbutton(tab_parameters, text="Вторая смена", variable=second_shift_current)
         second_shift_checkbutton.pack(side=TOP, padx=10, pady=10)
 
-        # Кнопка загрузки параметров
-        def load_parameters_def(self):
+        def load_parameters_def():
+            """
+            Кнопка загрузки параметров
+            """
+            # Количество учебных дней в неделе
             App.number_of_days_in_week = int(combo_days_in_week.get())
+
+            # Вторая смена
             App.second_shift = second_shift_current
 
-        load_parameters = Button(tab_parameters, text="Сохранить параметры", command=lambda: load_parameters_def(self))
+        # Кнопка загрузки параметров
+        load_parameters = Button(tab_parameters, text="Сохранить параметры", command=lambda: load_parameters_def())
         load_parameters.pack(side=BOTTOM, padx=10, pady=10)
         # TODO: добавить пожелания учителей
         # TODO: добавить распределение классов по сменам
@@ -164,10 +183,13 @@ class App(Frame):
         ga_button = Button(tab_schedule, text="Создать расписание",
                            command=lambda: self.create_schedule(tab_schedule, frame_table))
         ga_button.pack(side=BOTTOM, padx=10, pady=10)
-
         return
 
     def quit(self):
+        """
+        Выход из программы
+        :return:
+        """
         if messagebox.askyesno("Выйти", "Закрыть программу?"):
             self.parent.destroy()
 
@@ -178,15 +200,12 @@ class App(Frame):
                 App.df_rings.empty or App.df_audiences_lessons.empty:
             if messagebox.showinfo("Загрузить", "Введите все начальные данные"):
                 return
+        # Создаем объект класса расписание
+        self.schedule_obj = ga.Schedule(App.df_academic_plan, App.df_teachers, App.df_audiences_lessons,
+                                        App.df_audiences, App.df_rings, App.number_of_days_in_week, App.second_shift)
 
-        self.schedule_obj = ga.Schedule(App.df_academic_plan, App.df_teachers, App.df_audiences_lessons, App.df_audiences,
-                                    App.df_rings, App.number_of_days_in_week, App.second_shift)
-
-
-        self.show_schedule(tab_schedule, frame_schedule, self.schedule_obj.schedule)
-
-        # TODO: прописать остальные этапы генетического алгоритма
-
+        # Отображение расписания
+        self.show_schedule(tab_schedule, frame_schedule, self.schedule_obj.schedule_dict)
 
     @staticmethod
     def show_schedule(tab, frame, schedule: dict):
@@ -197,7 +216,7 @@ class App(Frame):
         :param schedule:
         :return:
         """
-        # Преобразование расписания
+        # Преобразование расписания в прямоугольную таблицу
         distinct_classes = sorted(App.df_academic_plan['class'].unique())
         data = [['' for __ in range(len(distinct_classes))] for _ in range(len(schedule))]
         interval_num = 0
@@ -207,22 +226,23 @@ class App(Frame):
                 item = str(lesson) + ' ' + str(teacher) + ' ' + str(audience)
                 data[interval_num][distinct_classes.index(school_class)] = item
             interval_num += 1
+
+        #data = App.schedule_obj.schedule_dict_to_table(App.schedule_obj)
+
+        # Добавление слева столбца с интервалами
         table = []
         interval_num = 0
-
         for interval in schedule:
             table.append((interval,) + tuple(data[interval_num]))
             interval_num += 1
 
         # Создание таблицы в Tkinter
         columns = ('',) + tuple(distinct_classes)
-
         tree = ttk.Treeview(frame, columns=columns, show="headings")
         # TODO: увеличить размер ячейки
         # TODO: отображение интервалов поверх таблицы при горизонтальной прокрутке
         tree.heading("", text="", anchor=CENTER)
         for i in distinct_classes:
-            # tree.column(str(i), anchor=CENTER, width=70)
             tree.heading(str(i), text=str(i), anchor=CENTER)
 
         for interval in table:
@@ -242,7 +262,7 @@ class App(Frame):
 
         def save_schedule_def(schedule_table: list) -> None:
             df = pd.DataFrame(schedule_table)
-            df.columns = [''] + distinct_classes
+            df.columns = [''] + App.schedule_obj.distinct_classes
             # TODO: Добавить другие типы файлов
             df.to_excel('./schedule.xlsx', sheet_name='Budgets', index=False)
 

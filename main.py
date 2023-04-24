@@ -205,44 +205,30 @@ class App(Frame):
                                         App.df_audiences, App.df_rings, App.number_of_days_in_week, App.second_shift)
 
         # Отображение расписания
-        self.show_schedule(tab_schedule, frame_schedule, self.schedule_obj.schedule_dict)
+        self.show_schedule(self, tab_schedule, frame_schedule)
 
     @staticmethod
-    def show_schedule(tab, frame, schedule: dict):
+    def show_schedule(self, tab, frame):
         """
         Вывод на экран готового расписания в третьей вкладке "Расписание"
+        :param self:
         :param tab:
         :param frame:
-        :param schedule:
         :return:
         """
-        # Преобразование расписания в прямоугольную таблицу
-        distinct_classes = sorted(App.df_academic_plan['class'].unique())
-        data = [['' for __ in range(len(distinct_classes))] for _ in range(len(schedule))]
-        interval_num = 0
-        for interval in schedule:
-            for audience in schedule[interval]:
-                school_class, lesson, teacher = [_ for _ in schedule[interval][audience]]
-                item = str(lesson) + ' ' + str(teacher) + ' ' + str(audience)
-                data[interval_num][distinct_classes.index(school_class)] = item
-            interval_num += 1
 
-        #data = App.schedule_obj.schedule_dict_to_table(App.schedule_obj)
-
-        # Добавление слева столбца с интервалами
+        # Добавление слева прямоугольной таблиц столбца с расписанием столбца с интервалами
         table = []
-        interval_num = 0
-        for interval in schedule:
-            table.append((interval,) + tuple(data[interval_num]))
-            interval_num += 1
+        for interval_num, interval in enumerate(self.schedule_obj.schedule_dict):
+            table.append((interval,) + tuple(self.schedule_obj.schedule_list[interval_num]))
 
         # Создание таблицы в Tkinter
-        columns = ('',) + tuple(distinct_classes)
+        columns = ('',) + tuple(self.schedule_obj.distinct_classes)
         tree = ttk.Treeview(frame, columns=columns, show="headings")
         # TODO: увеличить размер ячейки
         # TODO: отображение интервалов поверх таблицы при горизонтальной прокрутке
         tree.heading("", text="", anchor=CENTER)
-        for i in distinct_classes:
+        for i in self.schedule_obj.distinct_classes:
             tree.heading(str(i), text=str(i), anchor=CENTER)
 
         for interval in table:

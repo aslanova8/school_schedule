@@ -1,6 +1,5 @@
 import pandas as pd
 import random
-import math
 
 
 class Schedule:
@@ -39,11 +38,11 @@ class Schedule:
         self.df_audiences = df_audiences
 
         # Вводные
-        self.distinct_classes = sorted(tuple(cl for cl in df_academic_plan['class'].unique() if cl == cl))
+        self.distinct_classes = sorted(tuple(cl for cl in df_academic_plan['class'].unique() if cl == cl),
+                                       key=lambda x: int(x[:-1]))
 
         # Результат
         self.schedule_dict = self.ga_cycle()
-
 
     def get_empty_schedule(self) -> dict:
         """
@@ -95,17 +94,17 @@ class Schedule:
         self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
 
         # Распределение классов и интервалов на смены
-        shift = False
+        second_shift = False
         count_less_per_day = len(population) // self.number_of_days_in_week
         end_of_the_shift = count_less_per_day
-        distinct_classes = sorted(self.df_academic_plan['class'].unique())
-        class_shift = dict(zip(distinct_classes, [1 for _ in distinct_classes]))
-        if self.second_shift:
 
-            # Распределение классов по сменам
+        class_shift = dict(zip(self.distinct_classes, [1 for _ in self.distinct_classes]))
+
+        # Распределение классов по сменам
+        if self.second_shift:
             for cl in class_shift:
-                class_shift[cl] = int(shift) + 1
-                shift = not shift
+                class_shift[cl] = int(second_shift) + 1
+                second_shift = not second_shift
 
             # Конец первой смены
             end_of_the_shift = (end_of_the_shift - 1) // 2
@@ -120,34 +119,62 @@ class Schedule:
             count = row['count']
 
             # Формирование ячейки расписания
-            temp = [row['class'], row['lesson']]
+            temp = {"class": row['class'], "lesson": row['lesson']}
 
             # Выбор типа аудитории
             required_type_audience = self.df_audiences_lessons.loc[self.df_audiences_lessons['lesson']
                                                                    == row['lesson']].iloc[0]['type']
             possible_audiences = self.df_audiences.loc[self.df_audiences['type']
                                                        == required_type_audience]['audience'].to_list()
+            # Перемешали, чтоб рассаживать в разные аудитории,
+            # но исключить повторный выбор аудиторий за счет итерирования
             random.shuffle(possible_audiences)
 
             # Выбор учителя
             possible_teachers = self.df_teachers.loc[self.df_teachers['lesson'] == row['lesson']]['teacher'].to_list()
-            temp.append(possible_teachers[random.randrange(len(possible_teachers))])
+            temp["teacher"] = possible_teachers[random.randrange(len(possible_teachers))]
+
+            # Для каждого из этого урока в данном классе
             for _ in range(count):
+
+                # Флаг поиска аудитории и времени
                 look_for_item = 1
+
+                # Выбор случайного интервала
                 interval = get_interval()
+
+                # Цикл поиска для текущего урока
                 while look_for_item and count:
+
+                    # Проход по подходящим аудиториям
                     for audience in possible_audiences:
+
+                        # Если аудитория занята на это время
                         if audience in population[interval]:
-                            if population[interval][audience][0] == temp[0]:
+
+                            # Этим же классом
+                            if population[interval][audience]["class"] == temp["class"]:
+
+                                # Тогда меняем время занятия
                                 interval = get_interval()
                                 break
                             else:
+
+                                # След. итерация, т.е. меняем аудиторию
                                 continue
+
+                        # Аудитория свободна
                         else:
+
+                            # Занимаем ее
                             population[interval][audience] = temp
                             look_for_item = 0
                             break
+
+                    # Ни одна аудитория не оказалась свободной в это время
                     else:
+
+                        # Меняем время занятия
                         interval = get_interval()
 
         return population
@@ -166,8 +193,16 @@ class Schedule:
         return population
 
     def target_function(self, population: dict) -> dict:
+        """
+        Целевая функция, оценивающая расписание
+        :param population:
+        :return:
+        """
         self.schedule_list = self.schedule_dict_to_table(self)
+        # Учитель не ведет >1 урока в одно время
+
         # Окна у классов
+
         # Окна у учителей
         # TODO: система проверок на существование расписания под требования пользователя
         return population
@@ -178,16 +213,16 @@ class Schedule:
         Преобразование расписания в прямоугольную таблицу
         :return:
         """
-        temp = ['' for __ in range(len(self.distinct_classes))]
         data = [['' for __ in range(len(self.distinct_classes))]
                 for _ in range(len(self.schedule_dict))]
-        interval_num = 0
-        for interval in self.schedule_dict:
+         
+        for interval_i, interval in enumerate(self.schedule_dict):
             for audience in self.schedule_dict[interval]:
-                school_class, lesson, teacher = [_ for _ in self.schedule_dict[interval][audience]]
+                school_class = self.schedule_dict[interval][audience]['class']
+                lesson = self.schedule_dict[interval][audience]['lesson']
+                teacher = self.schedule_dict[interval][audience]['teacher']
                 item = str(lesson) + ' ' + str(teacher) + ' ' + str(audience)
-                data[interval_num][self.distinct_classes.index(school_class)] = item
-            interval_num += 1
+                data[interval_i][self.distinct_classes.index(school_class)] = item
 
         self.schedule_list = data
         return self.schedule_list

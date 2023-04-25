@@ -7,9 +7,9 @@ class Schedule:
 
     # Параметры
     number_of_days_in_week = 5
-    second_shift = 0
+    second_shift = False
 
-    # TODO можно ли убрать датафрейм и оставить только корежи
+    # TODO можно ли убрать датафрейм и оставить только кортежи
     # Датафреймы с вводными для расписания
     df_teachers = pd.DataFrame
     df_audiences = pd.DataFrame
@@ -89,7 +89,6 @@ class Schedule:
                 interval_index = random.randrange(n)
             return intervals[interval_index]
 
-        # TODO вложенные словари
         # Замена NaN в 2, 3, 4... строках для каждого класса
         self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
 
@@ -199,11 +198,46 @@ class Schedule:
         :return:
         """
         self.schedule_list = self.schedule_dict_to_table(self)
-        # Учитель не ведет >1 урока в одно время
 
         # Окна у классов
+        windows = set()
+
+        # Конец смены
+        end_of_the_shift = len(population) // self.number_of_days_in_week
+        if self.second_shift:
+            # Конец первой смены
+            end_of_the_shift = (end_of_the_shift - 1) // 2
+
+        for ind_class, school_class in enumerate(self.schedule_list[0]):
+            # Предыдущий интервал занят
+            is_prev_lesson = False
+
+            # Были ли сегодня уроки
+            today_lessons = False
+
+            for ind_interval, interval in enumerate(self.schedule_list):
+                # Новый день
+                if ind_interval % end_of_the_shift == 0:
+                    is_prev_lesson = False
+                    today_lessons = False
+                # Предыдущий интервал занят
+                if is_prev_lesson:
+                    continue
+                # Сейчас урока нет
+                elif not interval[ind_class]:
+                    continue
+                # Урока не было, сейчас есть, но уроки уже были сегодня
+                elif today_lessons:
+                    # Окно
+                    windows.add((ind_interval, ind_class))
+                # Уроков не было, но начались
+                else:
+                    today_lessons = True
 
         # Окна у учителей
+
+        # Учитель не ведет >1 урока в одно время
+
         # TODO: система проверок на существование расписания под требования пользователя
         return population
 
@@ -215,7 +249,7 @@ class Schedule:
         """
         data = [['' for __ in range(len(self.distinct_classes))]
                 for _ in range(len(self.schedule_dict))]
-         
+
         for interval_i, interval in enumerate(self.schedule_dict):
             for audience in self.schedule_dict[interval]:
                 school_class = self.schedule_dict[interval][audience]['class']

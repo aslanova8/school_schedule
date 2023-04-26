@@ -11,7 +11,7 @@ import genetic_algoritm.genetic_operators as ga
 class App(Frame):
     # Создание атрибутов класса
     number_of_days_in_week = 5
-    second_shift = 0
+    second_shift = False
 
     # Датафреймы с вводными для расписания
     df_teachers = pd.DataFrame
@@ -20,8 +20,7 @@ class App(Frame):
     df_rings = pd.DataFrame
     df_academic_plan = pd.DataFrame
 
-    # Расписание на вывод
-    schedule_obj = ga.Schedule
+    schedule_obj = None
 
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -223,12 +222,12 @@ class App(Frame):
             table.append((interval,) + tuple(self.schedule_obj.schedule_list[interval_num]))
 
         # Создание таблицы в Tkinter
-        columns = ('',) + tuple(self.schedule_obj.distinct_classes)
+        columns = ('',) + tuple(self.schedule_obj.classes)
         tree = ttk.Treeview(frame, columns=columns, show="headings")
         # TODO: увеличить размер ячейки
         # TODO: отображение интервалов поверх таблицы при горизонтальной прокрутке
         tree.heading("", text="", anchor=CENTER)
-        for i in self.schedule_obj.distinct_classes:
+        for i in self.schedule_obj.classes:
             tree.heading(str(i), text=str(i), anchor=CENTER)
 
         for interval in table:
@@ -248,7 +247,7 @@ class App(Frame):
 
         def save_schedule_def(schedule_table: list) -> None:
             df = pd.DataFrame(schedule_table)
-            df.columns = [''] + App.schedule_obj.distinct_classes
+            df.columns = [''] + App.schedule_obj.classes
             # TODO: Добавить другие типы файлов
             df.to_excel('./schedule.xlsx', sheet_name='Budgets', index=False)
 

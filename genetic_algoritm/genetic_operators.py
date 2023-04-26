@@ -29,7 +29,7 @@ class Schedule:
     df_audiences : pd.DataFrame
         Таблица о кабинетах и их оборудовании
 
-    distinct_classes : tuple
+    classes : tuple
         Упорядоченный кортеж с классами
 
 
@@ -68,7 +68,6 @@ class Schedule:
     schedule_dict_to_table():
          Преобразует расписание в таблицу.
     """
-
     weekdays = ('ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС')
 
     def __init__(self, df_academic_plan, df_teachers, df_audiences_lessons, df_audiences, df_rings,
@@ -100,7 +99,7 @@ class Schedule:
         df_audiences : pd.DataFrame
             таблица о кабинетах и их оборудовании
 
-        distinct_classes : tuple
+        classes : tuple
             упорядоченный кортеж с классами
 
 
@@ -131,7 +130,7 @@ class Schedule:
         self.number_of_days_in_week = number_of_days_in_week
         self.second_shift = second_shift
 
-        # Входные датафреймы
+        # Входные дата фреймы
         self.df_teachers = df_teachers
         self.df_rings = df_rings
         self.df_academic_plan = df_academic_plan
@@ -139,14 +138,14 @@ class Schedule:
         self.df_audiences = df_audiences
 
         # Вводные
-        self.distinct_classes = sorted(tuple(cl for cl in df_academic_plan['class'].unique() if cl == cl),
-                                       key=lambda x: int(x[:-1]))
+        self.classes = sorted(tuple(cl for cl in df_academic_plan['class'].unique() if cl == cl),
+                              key=lambda x: int(x[:-1]))
+        self.teachers = sorted(tuple(cl for cl in df_teachers['teacher'].unique()))
 
         # Результат
-        self.schedule_dict = self.ga_cycle()
-        self.schedule_list = None
+        self.ga_cycle()
 
-    def get_empty_schedule(self) -> dict:
+    def get_empty_schedule(self) -> None:
         """
         Создает пустой шаблон расписания в виде дикта, в котором ключи это интервалы уроков
         в течение недели, а значения - дикт с ключом в виде номера кабинета
@@ -179,10 +178,9 @@ class Schedule:
 
         # Пустой шаблон расписания для заполнения
         population = dict(zip(intervals, [{} for _ in range(len(intervals))]))
-        return population
+        self.schedule_dict = population
 
-    def create_first_population(self, population: dict) -> dict:
-        # TODO убрать популяцию из параметров
+    def create_first_population(self) -> None:
         """
         Возвращает расписание, в котором сохранена логика расписания между классами и кабинетами,
         но не между учителями.
@@ -205,16 +203,15 @@ class Schedule:
             Возвращаемое значение
             ---------------------
             str
-
             """
 
             # Сохранили случайный интервал
-            intervals = list(population.keys())
+            intervals = list(self.schedule_dict.keys())
             interval_index = random.randrange(len(intervals))
 
             # Пока не попали в смену
             while ((interval_index % count_less_per_day) > end_of_the_shift) != (class_shift[row['class']] - 1):
-                interval_index = random.randrange(n)
+                interval_index = random.randrange(len(intervals))
             return intervals[interval_index]
 
         # Замена NaN в 2, 3, 4... строках для каждого класса
@@ -222,11 +219,11 @@ class Schedule:
 
         # Распределение классов и интервалов на смены
         second_shift = False
-        count_less_per_day = len(population) // self.number_of_days_in_week
+        count_less_per_day = len(self.schedule_dict) // self.number_of_days_in_week
         end_of_the_shift = count_less_per_day
 
         # Словарь {класс: смена}
-        class_shift = dict(zip(self.distinct_classes, [1 for _ in self.distinct_classes]))
+        class_shift = dict(zip(self.classes, [1 for _ in self.classes]))
 
         # Распределение классов по сменам
         if self.second_shift:
@@ -237,7 +234,7 @@ class Schedule:
             # Конец первой смены
             end_of_the_shift = (end_of_the_shift - 1) // 2
 
-        # Распаковка датафрейма для учителей
+        # Распаковка дата фрейма для учителей
         for i, row in self.df_teachers.iterrows():
             self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
         self.df_teachers = self.df_teachers.explode('lesson')
@@ -278,10 +275,10 @@ class Schedule:
                     for audience in possible_audiences:
 
                         # Если аудитория занята на это время
-                        if audience in population[interval]:
+                        if audience in self.schedule_dict[interval]:
 
                             # Этим же классом
-                            if population[interval][audience]["class"] == temp["class"]:
+                            if self.schedule_dict[interval][audience]["class"] == temp["class"]:
 
                                 # Тогда меняем время занятия
                                 interval = get_interval()
@@ -295,7 +292,7 @@ class Schedule:
                         else:
 
                             # Занимаем ее
-                            population[interval][audience] = temp
+                            self.schedule_dict[interval][audience] = temp
                             look_for_item = 0
                             break
 
@@ -305,9 +302,7 @@ class Schedule:
                         # Меняем время занятия
                         interval = get_interval()
 
-        return population
-
-    def ga_cycle(self) -> dict:
+    def ga_cycle(self) -> None:
         """
         Основная логика генетического алгоритма.
 
@@ -321,14 +316,12 @@ class Schedule:
         dict
         """
 
-        population = self.get_empty_schedule()
-        population = self.create_first_population(population)
-        self.schedule_dict = population
-        population = self.target_function(population)
+        self.get_empty_schedule()
+        self.create_first_population()
 
-        return population
+        self.target_function()
 
-    def target_function(self, population: dict) -> dict:
+    def target_function(self) -> None:
         """
         Целевая функция, оценивающая расписание. Возвращает преобразованное расписание.
 
@@ -343,11 +336,12 @@ class Schedule:
         """
         self.schedule_list = self.schedule_dict_to_table(self)
 
+        # Разделить на подфункции
         # Окна у классов
         windows = set()
 
         # Конец смены
-        end_of_the_shift = len(population) // self.number_of_days_in_week
+        end_of_the_shift = len(self.schedule_dict) // self.number_of_days_in_week
         if self.second_shift:
             # Конец первой смены
             end_of_the_shift = (end_of_the_shift - 1) // 2
@@ -378,12 +372,25 @@ class Schedule:
                 else:
                     today_lessons = True
 
-        # Окна у учителей
-
         # Учитель не ведет >1 урока в одно время
 
+        data_teachers = [['' for _ in self.teachers]
+                         for _ in range(len(self.schedule_dict))]
+
+        for interval_i, interval in enumerate(self.schedule_dict):
+            for audience in self.schedule_dict[interval]:
+                school_class = self.schedule_dict[interval][audience]['class']
+                lesson = self.schedule_dict[interval][audience]['lesson']
+                teacher = self.teachers.index(self.schedule_dict[interval][audience]['teacher'])
+                item = str(lesson) + ' ' + str(school_class) + ' ' + str(audience)
+                if not data_teachers[interval_i][teacher]:
+                    data_teachers[interval_i][teacher] = item
+                else:
+                    # Учитель ведет >1 урока в одно время
+                    continue
+        # Окна у учителей
+
         # TODO: система проверок на существование расписания под требования пользователя
-        return population
 
     @staticmethod
     def schedule_dict_to_table(self) -> list:
@@ -396,8 +403,8 @@ class Schedule:
         """
 
         # Шаблон прямоугольной таблицы без заголовков строк и столбцов
-        data = [['' for __ in range(len(self.distinct_classes))]
-                for _ in range(len(self.schedule_dict))]
+        data_pupils = [['' for _ in range(len(self.classes))]
+                       for _ in range(len(self.schedule_dict))]
 
         for interval_i, interval in enumerate(self.schedule_dict):
             for audience in self.schedule_dict[interval]:
@@ -405,7 +412,7 @@ class Schedule:
                 lesson = self.schedule_dict[interval][audience]['lesson']
                 teacher = self.schedule_dict[interval][audience]['teacher']
                 item = str(lesson) + ' ' + str(teacher) + ' ' + str(audience)
-                data[interval_i][self.distinct_classes.index(school_class)] = item
+                data_pupils[interval_i][self.classes.index(school_class)] = item
 
-        self.schedule_list = data
+        self.schedule_list = data_pupils
         return self.schedule_list

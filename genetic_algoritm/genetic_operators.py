@@ -1,36 +1,137 @@
-import pandas as pd
 import random
 
 
 class Schedule:
+    """
+    Класс для представления расписания.
+
+    Атрибуты
+    --------
+    number_of_days_in_week : int
+        Количество учебных дней в неделе
+    second_shift : bool
+        Наличие второй смены
+
+    df_teachers : pd.DataFrame
+        Таблица с ФИО и специализацией учителей
+    df_rings : pd.DataFrame
+        Таблица с временем начала и конца каждого из уроков
+    df_academic_plan : pd.DataFrame
+        Учебный план в таблице из трех столбцов
+            class : str
+                класс
+            lesson : str
+                наименование дисциплины
+            count : int
+                количество данных уроков в неделю
+    df_audiences_lessons : pd.DataFrame
+        Таблица о необходимом для урока оборудовании
+    df_audiences : pd.DataFrame
+        Таблица о кабинетах и их оборудовании
+
+    distinct_classes : tuple
+        Упорядоченный кортеж с классами
+
+
+    schedule_dict : dict
+        Текущий вариант расписания по шаблону
+        {'weekday start:end':
+                            {'audience':
+                                            {'class': str
+                                            'lesson': str
+                                            'teacher': str}
+                            }
+                            ...
+        ...
+        }
+
+    schedule_list : list
+        Текущий вариант расписания в виде прямоугольной таблицы
+                | класс1 | класс2 | класс3 | класс4 |...
+        --------
+        Пн урок 1
+        --------
+        Пн урок 2
+        --------
+        ...
+
+    Методы
+    ------
+    get_empty_schedule():
+        Возвращает пустой шаблон расписания.
+    create_first_population(population):
+        Создает черновой вариант расписания поверх пустого шаблона.
+    ga_cycle():
+        Основная логика генетического алгоритма.
+    target_function():
+        Целевая функция генетического алгоритма. Выявление недостатков расписания.
+    schedule_dict_to_table():
+         Преобразует расписание в таблицу.
+    """
+
     weekdays = ('ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС')
-
-    # Параметры
-    number_of_days_in_week = 5
-    second_shift = False
-
-    # TODO можно ли убрать датафрейм и оставить только кортежи
-    # Датафреймы с вводными для расписания
-    df_teachers = pd.DataFrame
-    df_audiences = pd.DataFrame
-    df_audiences_lessons = pd.DataFrame
-    df_rings = pd.DataFrame
-    df_academic_plan = pd.DataFrame
-
-    # Вводные для расписания
-    distinct_classes = tuple
-
-    # Заготовка расписания
-    schedule_dict = dict
-    schedule_list = list
 
     def __init__(self, df_academic_plan, df_teachers, df_audiences_lessons, df_audiences, df_rings,
                  number_of_days_in_week, second_shift):
-        # Параметры
+        """
+        Устанавливает все необходимые атрибуты для объекта Schedule.
+
+        Параметры
+        ---------
+        number_of_days_in_week : int
+            количество учебных дней в неделе
+        second_shift : bool
+            наличие второй смены
+
+        df_teachers : pd.DataFrame
+            таблица с ФИО и специализацией учителей
+        df_rings : pd.DataFrame
+            таблица с временем начала и конца каждого из уроков
+        df_academic_plan : pd.DataFrame
+            учебный план в таблице из трех столбцов
+                class : str
+                    класс
+                lesson : str
+                    наименование дисциплины
+                count : int
+                    количество данных уроков в неделю
+        df_audiences_lessons : pd.DataFrame
+            таблица о необходимом для урока оборудовании
+        df_audiences : pd.DataFrame
+            таблица о кабинетах и их оборудовании
+
+        distinct_classes : tuple
+            упорядоченный кортеж с классами
+
+
+        schedule_dict : dict
+            текущий вариант расписания по шаблону
+            {'weekday start:end':
+                                {'audience':
+                                                {'class': str
+                                                'lesson': str
+                                                'teacher': str}
+                                }
+                                ...
+            ...
+            }
+
+        schedule_list : list
+            текущий вариант расписания в виде прямоугольной таблицы
+                    | класс1 | класс2 | класс3 | класс4 |...
+            --------
+            Пн урок 1
+            --------
+            Пн урок 2
+            --------
+            ...
+        """
+
+        # Данные школы
         self.number_of_days_in_week = number_of_days_in_week
         self.second_shift = second_shift
 
-        # Датафреймы
+        # Входные датафреймы
         self.df_teachers = df_teachers
         self.df_rings = df_rings
         self.df_academic_plan = df_academic_plan
@@ -43,20 +144,35 @@ class Schedule:
 
         # Результат
         self.schedule_dict = self.ga_cycle()
+        self.schedule_list = None
 
     def get_empty_schedule(self) -> dict:
         """
-        Эта функция создает пустой шаблон расписания в виде дикта, в котором ключи это интервалы уроков
-        в течение недели, а значения - дикт с ключом в виде номера кабинета со значением класса и учителя
+        Создает пустой шаблон расписания в виде дикта, в котором ключи это интервалы уроков
+        в течение недели, а значения - дикт с ключом в виде номера кабинета
+        со значением класса и учителя.
 
-        :return: dict
+        {'weekday start:end':
+                                {'audience':
+                                                {'class': str
+                                                'lesson': str
+                                                'teacher': str}
+                                }
+                                ...
+        ...
+        }
+
+        Возвращаемое значение
+        ---------------------
+        dict
         """
 
+        # Преобразуем начало и конец уроков в списки
         end_interval = self.df_rings['end'].tolist()
         start_interval = self.df_rings['begin'].tolist()
-        intervals = []
 
         # Интервалы, в которые будут ставиться уроки
+        intervals = []
         for i in range(self.number_of_days_in_week):
             for j in range(len(start_interval)):
                 intervals.append(str(Schedule.weekdays[i]) + ' ' + str(start_interval[j]) + ' ' + str(end_interval[j]))
@@ -66,23 +182,35 @@ class Schedule:
         return population
 
     def create_first_population(self, population: dict) -> dict:
+        # TODO убрать популяцию из параметров
         """
-        Функция возвращает расписание, в котором сохранена логика расписания между классами и кабинетами,
-        но не между учителями
-        :param population: Пустое расписание
+        Возвращает расписание, в котором сохранена логика расписания между классами и кабинетами,
+        но не между учителями.
 
-        :return: первый вариант расписания
+        Параметры
+        ---------
+        population : dict
+            пустое расписание
+
+        Возвращаемое значение
+        ---------------------
+        dict
+            первый вариант расписания
         """
 
         def get_interval() -> str:
             """
-            Возвращает случайно выбранное время для урока в нужную смену
-            :return:
+            Возвращает случайно выбранное время для урока в нужную смену.
+
+            Возвращаемое значение
+            ---------------------
+            str
+
             """
 
+            # Сохранили случайный интервал
             intervals = list(population.keys())
-            n = len(intervals)
-            interval_index = random.randrange(n)
+            interval_index = random.randrange(len(intervals))
 
             # Пока не попали в смену
             while ((interval_index % count_less_per_day) > end_of_the_shift) != (class_shift[row['class']] - 1):
@@ -97,6 +225,7 @@ class Schedule:
         count_less_per_day = len(population) // self.number_of_days_in_week
         end_of_the_shift = count_less_per_day
 
+        # Словарь {класс: смена}
         class_shift = dict(zip(self.distinct_classes, [1 for _ in self.distinct_classes]))
 
         # Распределение классов по сменам
@@ -180,22 +309,37 @@ class Schedule:
 
     def ga_cycle(self) -> dict:
         """
-        Здесь основная логика генетического алгоритма
-        :return:
+        Основная логика генетического алгоритма.
+
+        Последовательно создаем расписание:
+        1. Пустой шаблон
+        2. Черновой вариант заполнения
+        3. Целевая функция и преобразование расписания
+
+        Возвращаемое значение
+        ---------------------
+        dict
         """
+
         population = self.get_empty_schedule()
         population = self.create_first_population(population)
         self.schedule_dict = population
-
         population = self.target_function(population)
 
         return population
 
     def target_function(self, population: dict) -> dict:
         """
-        Целевая функция, оценивающая расписание
-        :param population:
-        :return:
+        Целевая функция, оценивающая расписание. Возвращает преобразованное расписание.
+
+        Параметры
+        ---------
+        population : dict
+            Черновой вариант расписания
+
+        Возвращаемое значение
+        ---------------------
+        dict
         """
         self.schedule_list = self.schedule_dict_to_table(self)
 
@@ -244,9 +388,14 @@ class Schedule:
     @staticmethod
     def schedule_dict_to_table(self) -> list:
         """
-        Преобразование расписания в прямоугольную таблицу
-        :return:
+        Преобразование расписания в прямоугольную таблицу.
+
+        Возвращаемое значение
+        ---------------------
+        list
         """
+
+        # Шаблон прямоугольной таблицы без заголовков строк и столбцов
         data = [['' for __ in range(len(self.distinct_classes))]
                 for _ in range(len(self.schedule_dict))]
 

@@ -1,3 +1,4 @@
+import textwrap
 import pandas as pd
 from tkinter import messagebox
 from tkinter import *
@@ -224,7 +225,7 @@ class App(Frame):
         # Создание таблицы в Tkinter
         columns = ('',) + tuple(self.schedule_obj.classes)
         tree = ttk.Treeview(frame, columns=columns, show="headings")
-        # TODO: увеличить размер ячейки
+
         # TODO: отображение интервалов поверх таблицы при горизонтальной прокрутке
         tree.heading("", text="", anchor=CENTER)
         for i in self.schedule_obj.classes:
@@ -243,11 +244,15 @@ class App(Frame):
         tree.configure(xscrollcommand=scrollbar_h.set)
         scrollbar_h.pack(side=BOTTOM, fill=X)
 
+        # Увеличение высоты ячейки таблицы
+        s = ttk.Style()
+        s.configure('Treeview', rowheight=50)
+
         tree.pack(fill=BOTH, expand=1)
 
         def save_schedule_def(schedule_table: list) -> None:
             df = pd.DataFrame(schedule_table)
-            df.columns = [''] + App.schedule_obj.classes
+            df.columns = [''] + list(self.schedule_obj.classes)
             # TODO: Добавить другие типы файлов
             df.to_excel('./schedule.xlsx', sheet_name='Budgets', index=False)
 

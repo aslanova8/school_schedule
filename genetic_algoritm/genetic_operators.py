@@ -149,7 +149,7 @@ class Schedule:
         """
         Создает пустой шаблон расписания в виде дикта, в котором ключи это интервалы уроков
         в течение недели, а значения - дикт с ключом в виде номера кабинета
-        со значением класса и учителя.
+        со значением класса и учителя. Шаблон сохраняется в атрибут schedule_dict.
 
         {'weekday start:end':
                                 {'audience':
@@ -163,7 +163,7 @@ class Schedule:
 
         Возвращаемое значение
         ---------------------
-        dict
+        None
         """
 
         # Преобразуем начало и конец уроков в списки
@@ -182,18 +182,12 @@ class Schedule:
 
     def create_first_population(self) -> None:
         """
-        Возвращает расписание, в котором сохранена логика расписания между классами и кабинетами,
-        но не между учителями.
-
-        Параметры
-        ---------
-        population : dict
-            пустое расписание
+        Создает расписание, в котором сохранена логика расписания между классами и кабинетами,
+        но не между учителями. Сохраняет расписание поверх шаблона в schedule_dict.
 
         Возвращаемое значение
         ---------------------
-        dict
-            первый вариант расписания
+        None
         """
 
         def get_interval() -> str:
@@ -225,11 +219,14 @@ class Schedule:
         # Словарь {класс: смена}
         class_shift = dict(zip(self.classes, [1 for _ in self.classes]))
 
-        # Распределение классов по сменам
+        # Распределение классов по сменам в случае наличия второй смены
         if self.second_shift:
-            for cl in class_shift:
-                class_shift[cl] = int(second_shift) + 1
-                second_shift = not second_shift
+
+            # Стандарт распределения классов на смены
+            shift_standart = {1: False, 2: True, 3: True, 4: True, 5: False, 6: True, 7: True, 8: True, 9: False,
+                              10: False, 11: False}
+            for clas in class_shift.keys():
+                class_shift[clas] = shift_standart[int(clas[:-1])] + 1
 
             # Конец первой смены
             end_of_the_shift = (end_of_the_shift - 1) // 2
@@ -313,7 +310,7 @@ class Schedule:
 
         Возвращаемое значение
         ---------------------
-        dict
+        None
         """
 
         self.get_empty_schedule()
@@ -323,16 +320,12 @@ class Schedule:
 
     def target_function(self) -> None:
         """
-        Целевая функция, оценивающая расписание. Возвращает преобразованное расписание.
-
-        Параметры
-        ---------
-        population : dict
-            Черновой вариант расписания
+        Целевая функция, оценивающая расписание. Сохраняет преобразованное расписание
+        в schedule_dict и schedule_list.
 
         Возвращаемое значение
         ---------------------
-        dict
+        None
         """
         self.schedule_list = self.schedule_dict_to_table(self)
 
@@ -411,7 +404,7 @@ class Schedule:
                 school_class = self.schedule_dict[interval][audience]['class']
                 lesson = self.schedule_dict[interval][audience]['lesson']
                 teacher = self.schedule_dict[interval][audience]['teacher']
-                item = str(lesson) + ' ' + str(teacher) + ' ' + str(audience)
+                item = str(lesson) + '\n' + str(teacher) + '\n' + str(audience)
                 data_pupils[interval_i][self.classes.index(school_class)] = item
 
         self.schedule_list = data_pupils

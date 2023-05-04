@@ -28,6 +28,8 @@ class Schedule:
         Таблица о необходимом для урока оборудовании
     df_audiences : pd.DataFrame
         Таблица о кабинетах и их оборудовании
+    df_teachers_wishes : pd.DataFrame
+        Таблица о пожеланиях учителей
 
     classes : tuple
         Упорядоченный кортеж с классами
@@ -70,10 +72,10 @@ class Schedule:
     """
     weekdays = ('ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС')
 
-    def __init__(self, df_academic_plan, df_teachers, df_audiences_lessons, df_audiences, df_rings,
+    def __init__(self, df_academic_plan, df_teachers, df_audiences_lessons, df_audiences, df_rings, df_teachers_wishes,
                  number_of_days_in_week, second_shift):
         """
-        Устанавливает все необходимые атрибуты для объекта Schedule.
+        Устанавливает необходимые атрибуты для объекта Schedule.
 
         Параметры
         ---------
@@ -98,6 +100,8 @@ class Schedule:
             таблица о необходимом для урока оборудовании
         df_audiences : pd.DataFrame
             таблица о кабинетах и их оборудовании
+        df_teachers_wishes : pd.DataFrame
+            Таблица о пожеланиях учителей
 
         classes : tuple
             упорядоченный кортеж с классами
@@ -136,7 +140,7 @@ class Schedule:
         self.df_academic_plan = df_academic_plan
         self.df_audiences_lessons = df_audiences_lessons
         self.df_audiences = df_audiences
-
+        self.df_teachers_wishes = df_teachers_wishes
         # Вводные
         self.classes = sorted(tuple(cl for cl in df_academic_plan['class'].unique() if cl == cl),
                               key=lambda x: int(x[:-1]))
@@ -210,6 +214,9 @@ class Schedule:
 
         # Замена NaN в 2, 3, 4... строках для каждого класса
         self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
+
+        # Замена NaN в 2, 3, 4... строках для каждого учителя
+        self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
 
         # Распределение классов и интервалов на смены
         second_shift = False

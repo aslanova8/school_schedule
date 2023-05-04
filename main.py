@@ -1,4 +1,3 @@
-import textwrap
 import pandas as pd
 from tkinter import messagebox
 from tkinter import *
@@ -10,6 +9,24 @@ import genetic_algoritm.genetic_operators as ga
 
 
 class App(Frame):
+    """
+    Класс для создания приложения
+
+    Атрибуты
+    --------
+    number_of_days_in_week : int
+        Количество учебных дней в неделе
+    second_shift : bool
+        Наличие второй смены
+
+    schedule_obj: ga.Schedule
+        текущий вариант расписания, который выводится в третьей вкладке
+
+    Методы
+    ------
+    get_empty_schedule():
+        Возвращает пустой шаблон расписания.
+    """
     # Создание атрибутов класса
     number_of_days_in_week = 5
     second_shift = False
@@ -20,10 +37,18 @@ class App(Frame):
     df_audiences_lessons = pd.DataFrame
     df_rings = pd.DataFrame
     df_academic_plan = pd.DataFrame
-
+    df_teachers_wishes = pd.DataFrame
     schedule_obj = None
 
     def __init__(self, parent):
+        """
+        Устанавливает необходимые атрибуты для объекта App.
+
+        Параметры
+        ---------
+        parent: Tk()
+            ссылка на корневое окно root
+        """
         Frame.__init__(self, parent)
 
         # Сохранение ссылки на корневое окно
@@ -33,6 +58,7 @@ class App(Frame):
         self.init_ui()
 
     def init_ui(self):
+
         """
         Инициализация интерфейса пользователя, в частности каждой из четырех вкладок приложения:
 
@@ -42,9 +68,8 @@ class App(Frame):
         1. Ввод данных о расписании - tab_files
         2. Настройка параметров расписания - tab_parameters
         3. Вывод расписания и его скачивание - tab_schedule
-
-        :return:
         """
+
         # 0.
         # Заголовок окна
         self.parent.title('Система создания школьного расписания')
@@ -112,11 +137,13 @@ class App(Frame):
                                                fg='#f0f0f0')
         label_loaded_audiences_lessons.pack(side=LEFT, padx=10, pady=10)
 
-        def load_df(df: str):
+        def load_df(df: str) -> None:
             """
-            Загрузка файлов
-            :param df:
-            :return:
+            Загрузка файлов и преобразование их в pandas.DataFrame
+            Параметры
+            ---------
+            df: str
+                Имя, по которому идет обращение к файлу. Оно же присваивается датафрейму.
             """
 
             # Создаем команды для определенных файлов
@@ -130,6 +157,7 @@ class App(Frame):
             label_loaded_audiences.configure()
             label_loaded_rings.configure()
             label_loaded_audiences_lessons.configure()
+            label_loaded_teachers_wishes.configure()
 
             # Загрузка
             exec(str_load)
@@ -160,7 +188,50 @@ class App(Frame):
         second_shift_checkbutton = ttk.Checkbutton(tab_parameters, text="Вторая смена", variable=second_shift_current)
         second_shift_checkbutton.pack(side=TOP, padx=10, pady=10)
 
-        def load_parameters_def():
+        # Пожелания учителей
+
+        # Создаем рамки
+        # Общая рамка
+        frame_teachers_wishes = LabelFrame(tab_parameters, text="Пожелания учителей", relief=RAISED, borderwidth=1)
+        frame_teachers_wishes.pack(fill=BOTH, expand=True)
+
+        # Рамка для загрузки файла
+        frame_teachers_wishes_load = LabelFrame(frame_teachers_wishes, text="Загрузить файл", relief=RAISED,
+                                                borderwidth=1)
+        frame_teachers_wishes_load.pack(fill=BOTH, expand=True)
+
+        # Рамка для ввода данных вручную
+        frame_teachers_wishes_write = LabelFrame(frame_teachers_wishes, text="Ввести вручную", relief=RAISED,
+                                                 borderwidth=1)
+        frame_teachers_wishes_write.pack(fill=BOTH, expand=True)
+
+        # Кнопка загрузки пожеланий учителей
+        load_button_teachers_wishes = Button(frame_teachers_wishes_load, text="Загрузить",
+                                             command=lambda: load_df('teachers_wishes'))
+        load_button_teachers_wishes.pack(side=RIGHT, padx=10, pady=10)
+
+        # Сообщение о загрузке данных
+        label_loaded_teachers_wishes = Label(frame_teachers_wishes, text=f'Загружены пожелания учителей', fg='#f0f0f0')
+        label_loaded_teachers_wishes.pack(side=LEFT, padx=10, pady=10)
+
+        # Лейбл с учителями
+        label_teacher = Label(frame_teachers_wishes_write, text=f'Учителя')
+        label_teacher.pack(side=LEFT, padx=10, pady=10)
+
+        # Поле ввода для имени учителя
+        entry_t_w = ttk.Entry(frame_teachers_wishes_write)
+        entry_t_w.pack(side=LEFT, padx=6, pady=6)
+
+        # Лейбл с интервалом
+        label_interval = Label(frame_teachers_wishes_write, text=f'Время')
+        label_interval.pack(side=LEFT, padx=10, pady=10)
+
+        # Поле ввода интервала
+        entry_interval = ttk.Entry(frame_teachers_wishes_write)
+        entry_interval.pack(side=LEFT, padx=6, pady=6)
+        
+
+        def load_parameters_def() -> None:
             """
             Кнопка загрузки параметров
             """
@@ -173,8 +244,6 @@ class App(Frame):
         # Кнопка загрузки параметров
         load_parameters = Button(tab_parameters, text="Сохранить параметры", command=lambda: load_parameters_def())
         load_parameters.pack(side=BOTTOM, padx=10, pady=10)
-        # TODO: добавить пожелания учителей
-        # TODO: добавить распределение классов по сменам
 
         # 3.
         # Создание расписания
@@ -188,33 +257,46 @@ class App(Frame):
     def quit(self):
         """
         Выход из программы
-        :return:
         """
         if messagebox.askyesno("Выйти", "Закрыть программу?"):
             self.parent.destroy()
 
-    def create_schedule(self, tab_schedule, frame_schedule):
+    def create_schedule(self, tab_schedule, frame_schedule) -> None:
+        """
+        Создание расписания
 
+        Параметры
+        ---------
+        tab_schedule
+            Вкладка, на которой расписание будет отображено
+        frame_schedule
+            Рамка, где будет развернута сетка таблицы расписания
+        """
         # Проверка на полноту данных
         if App.df_teachers.empty or App.df_audiences.empty or App.df_academic_plan.empty or \
                 App.df_rings.empty or App.df_audiences_lessons.empty:
             if messagebox.showinfo("Загрузить", "Введите все начальные данные"):
                 return
+
         # Создаем объект класса расписание
         self.schedule_obj = ga.Schedule(App.df_academic_plan, App.df_teachers, App.df_audiences_lessons,
-                                        App.df_audiences, App.df_rings, App.number_of_days_in_week, App.second_shift)
+                                        App.df_audiences, App.df_rings, App.df_teachers_wishes,
+                                        App.number_of_days_in_week, App.second_shift)
 
         # Отображение расписания
         self.show_schedule(self, tab_schedule, frame_schedule)
 
     @staticmethod
-    def show_schedule(self, tab, frame):
+    def show_schedule(self, tab, frame) -> None:
         """
         Вывод на экран готового расписания в третьей вкладке "Расписание"
-        :param self:
-        :param tab:
-        :param frame:
-        :return:
+
+        Параметры
+        ---------
+        tab
+            Вкладка, на которой расписание будет отображено
+        frame
+            Рамка, где будет развернута сетка таблицы расписания
         """
 
         # Добавление слева прямоугольной таблиц столбца с расписанием столбца с интервалами

@@ -241,13 +241,14 @@ class App(Frame):
         # Кнопка загрузки пожеланий учителей введенных вручную
         load_button_teachers_wishes_write = Button(frame_teachers_wishes_write, text="Загрузить",
                                                    command=lambda: get_teacher_suggestions())
-        load_button_teachers_wishes_write.grid(row=0, column=3, ipadx=6, ipady=6, padx=4, pady=4, sticky=EW)
+        load_button_teachers_wishes_write.grid(row=0, column=3, rowspan=2, ipadx=6, ipady=6, padx=4, pady=4, sticky=EW)
 
+        #
         # TODO доделать расположение
         def get_teacher_suggestions() -> None:
             """
-            Функция добавления вручную введенных пожеланий учителей в ДатаФрейм
-            Считывание данных из окон ввода
+            Функция добавления вручную введенных пожеланий учителей в ДатаФрейм.
+            Считывание данных из окон ввода.
 
             """
             # Введенные данные

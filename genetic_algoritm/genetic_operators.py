@@ -397,10 +397,56 @@ class Schedule:
 
         # TODO: система проверок на существование расписания под требования пользователя
 
-    def krossingover(self):
-        pass
+    def krossingover(self, target_class1: str, target_class2: str) -> None:
+        """
+        Генетический оператор кроссинговера: обмен участками расписания двух классов.
 
-    def inversion(self, target_class: str) -> None:
+        Параметры
+        ---------
+        target_class1 : str
+            Хромосома, участок генов которой будет заменен на другой.
+            Класс, расписание которого будет меняться.
+        target_class2 : str
+            Хромосома, участок генов которой будет заменен на другой.
+            Класс, расписание которого будет меняться.
+        """
+        # Случайный интервал
+        start_interval, end_interval = random.choice(list(self.intervals)), random.choice(list(self.intervals))
+        start_interval_ind, end_interval_ind = self.intervals.index(start_interval), self.intervals.index(end_interval)
+        if start_interval_ind > end_interval_ind:
+            start_interval, end_interval = end_interval, start_interval
+            start_interval_ind, end_interval_ind = end_interval_ind, start_interval_ind
+        while start_interval_ind < end_interval_ind:
+
+            # Извлекаем ячейки для первого и второго класса
+            sch_dict1, sch_dict2 = {}, {}
+
+            # TODO здесь могут быть накладки с кабинетами и учебным планом
+            for audience, dictionary in self.schedule_dict[start_interval].items():
+
+                # Извлекаем ячейку с target_class1
+                if dictionary['class'] == target_class1:
+                    sch_dict1[audience] = dictionary
+                    del self.schedule_dict[start_interval][audience]
+                # Извлекаем ячейку с target_class2
+                if dictionary['class'] == target_class2:
+                    sch_dict2[audience] = dictionary
+                    del self.schedule_dict[start_interval][audience]
+
+            # Ставим ячейки в новое место в таблице
+            if sch_dict1:
+                for audience, dictionary in sch_dict1:
+                    sch_dict1[audience]['class'] = target_class2
+                    self.schedule_dict[start_interval][audience] = sch_dict1[audience]
+            if sch_dict2:
+                for audience, dictionary in sch_dict2:
+                    sch_dict2[audience]['class'] = target_class1
+                    self.schedule_dict[start_interval][audience] = sch_dict2[audience]
+
+            start_interval_ind += 1
+            start_interval = self.intervals[start_interval_ind]
+
+    def classic_ga_inversion(self, target_class: str) -> None:
         """
         Генетический оператор инверсии: разворачивает столбец расписания на 180 градусов
         от начала недели до случайно выбранной точки.
@@ -416,7 +462,7 @@ class Schedule:
         start_interval_ind = 0
 
         # Случайный интервал, конец участка обмена
-        end_interval = random.choice(list(self.schedule_dict.keys()))
+        end_interval = random.choice(list(self.intervals))
         end_interval_ind = self.intervals.index(end_interval)
 
         # Обход с концов интервала инверсии к его середине
@@ -446,15 +492,10 @@ class Schedule:
                 for audience, dictionary in end_dict:
                     self.schedule_dict[start_interval][audience] = dictionary
 
-            # TODO оператор присваивания
-            # start_interval_ind += 1
-            # end_interval_ind -= 1
-            # start_interval = self.intervals[start_interval_ind]
-            # end_interval = self.intervals[end_interval_ind]
-            start_interval = self.intervals[start_interval_ind := start_interval_ind + 1]
-            end_interval = self.intervals[end_interval_ind := end_interval_ind - 1]
+            start_interval_ind += 1
+            end_interval_ind -= 1
 
-    def mutation(self, target_class: str) -> None:
+    def classic_ga_mutation(self, target_class: str) -> None:
         """
         Генетический оператор мутации: изменение случайно выбранного гена(ячейки расписания).
 

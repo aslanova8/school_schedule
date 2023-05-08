@@ -276,7 +276,7 @@ class App(Frame):
             App.number_of_days_in_week = int(combo_days_in_week.get())
 
             # Вторая смена
-            App.second_shift = second_shift_current
+            App.second_shift = second_shift_current.get()
             return
 
         # Кнопка загрузки параметров

@@ -40,7 +40,7 @@ class Schedule:
 
     schedule_dict : dict
         Текущий вариант расписания по шаблону
-        {'weekday start:end':
+        {'WD HH:MM:SS-HH:MM:SS':
                             {'audience':
                                             {'class': str
                                             'lesson': str
@@ -62,16 +62,21 @@ class Schedule:
 
     Методы
     ------
-    get_empty_schedule():
-        Возвращает пустой шаблон расписания.
     create_first_population(population):
         Создает черновой вариант расписания поверх пустого шаблона.
-    ga_cycle():
+    classic_ga():
         Основная логика генетического алгоритма.
-    target_function():
+    classic_ga_target_function():
         Целевая функция генетического алгоритма. Выявление недостатков расписания.
+    classic_ga_krossingover():
+        Кроссинговер.
+    classic_ga_inversion():
+        Инверсия.
+    classic_ga_mutation():
+        Мутация.
+
     schedule_dict_to_table():
-         Преобразует расписание в таблицу.
+         Преобразует расписание в таблицу и заполняет атрибут schedule_list для вывода в приложение.
     """
     weekdays = ('ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС')
 
@@ -83,39 +88,39 @@ class Schedule:
         Параметры
         ---------
         number_of_days_in_week : int
-            количество учебных дней в неделе
+            Количество учебных дней в неделе.
         second_shift : bool
-            наличие второй смены
+            Наличие второй смены.
 
         df_teachers : pd.DataFrame
-            таблица с ФИО и специализацией учителей
+            Таблица с ФИО и специализацией учителей.
         df_rings : pd.DataFrame
-            таблица с временем начала и конца каждого из уроков
+            Таблица с временем начала и конца каждого из уроков.
         df_academic_plan : pd.DataFrame
-            учебный план в таблице из трех столбцов
+            Учебный план в таблице из трех столбцов.
                 class : str
-                    класс
+                    Класс.
                 lesson : str
-                    наименование дисциплины
+                    Наименование дисциплины.
                 count : int
-                    количество данных уроков в неделю
+                    Количество данных уроков в неделю.
         df_audiences_lessons : pd.DataFrame
-            таблица о необходимом для урока оборудовании
+            Таблица о необходимом для урока оборудовании.
         df_audiences : pd.DataFrame
-            таблица о кабинетах и их оборудовании
+            Таблица о кабинетах и их оборудовании.
         df_teachers_wishes : pd.DataFrame
-            Таблица о пожеланиях учителей
+            Таблица о пожеланиях учителей.
 
         classes : tuple
-            упорядоченный кортеж с классами
+            Упорядоченный кортеж с классами.
         teachers : tuple
-            упорядоченный кортеж с учителями
+            Упорядоченный кортеж с учителями.
         intervals : tuple
-            упорядоченный кортеж с интервалами для уроков
+            Упорядоченный кортеж с интервалами для уроков.
 
         schedule_dict : dict
-            текущий вариант расписания по шаблону
-            {'weekday start:end':
+            Текущий вариант расписания по шаблону.
+            {'WD HH:MM:SS-HH:MM:SS':
                                 {'audience':
                                                 {'class': str
                                                 'lesson': str
@@ -126,7 +131,7 @@ class Schedule:
             }
 
         schedule_list : list
-            текущий вариант расписания в виде прямоугольной таблицы
+            Текущий вариант расписания в виде прямоугольной таблицы.
                     | класс1 | класс2 | класс3 | класс4 |...
             --------
             Пн урок 1
@@ -165,28 +170,8 @@ class Schedule:
         self.intervals = tuple(intervals)
 
         # Результат
-        self.ga_cycle()
+        self.classic_ga()
 
-    def get_empty_schedule(self) -> None:
-        """
-        Создает пустой шаблон расписания в виде дикта, в котором ключи это интервалы уроков
-        в течение недели, а значения - дикт с ключом в виде номера кабинета
-        со значением класса и учителя. Шаблон сохраняется в атрибут schedule_dict.
-
-        {'weekday start:end':
-                                {'audience':
-                                                {'class': str
-                                                'lesson': str
-                                                'teacher': str}
-                                }
-                                ...
-        ...
-        }
-
-        Возвращаемое значение
-        ---------------------
-        None
-        """
         # Пустой шаблон расписания для заполнения
         self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
 
@@ -207,6 +192,7 @@ class Schedule:
             Возвращаемое значение
             ---------------------
             str
+                строка вида 'WD HH:MM:SS-HH:MM:SS'
             """
 
             # Сохранили случайный интервал
@@ -311,26 +297,22 @@ class Schedule:
                         # Меняем время занятия
                         interval = get_interval()
 
-    def ga_cycle(self) -> None:
+    def classic_ga(self) -> None:
         """
-        Основная логика генетического алгоритма.
+        Основная логика классического генетического алгоритма.:
 
-        Последовательно создаем расписание:
-        1. Пустой шаблон
-        2. Черновой вариант заполнения
-        3. Целевая функция и преобразование расписания
+        1. Первая популяция.
+        2. Целевая функция и преобразование расписания.
 
         Возвращаемое значение
         ---------------------
         None
         """
-
-        self.get_empty_schedule()
         self.create_first_population()
 
-        self.target_function()
+        self.classic_ga_target_function()
 
-    def target_function(self) -> None:
+    def classic_ga_target_function(self) -> None:
         """
         Целевая функция, оценивающая расписание. Сохраняет преобразованное расписание
         в schedule_dict и schedule_list.
@@ -397,7 +379,7 @@ class Schedule:
 
         # TODO: система проверок на существование расписания под требования пользователя
 
-    def krossingover(self, target_class1: str, target_class2: str) -> None:
+    def classic_ga_krossingover(self, target_class1: str, target_class2: str) -> None:
         """
         Генетический оператор кроссинговера: обмен участками расписания двух классов.
 

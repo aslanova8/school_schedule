@@ -206,30 +206,67 @@ class App(Frame):
         frame_teachers_wishes_write.pack(fill=BOTH, expand=True)
 
         # Кнопка загрузки пожеланий учителей
-        load_button_teachers_wishes = Button(frame_teachers_wishes_load, text="Загрузить",
-                                             command=lambda: load_df('teachers_wishes'))
-        load_button_teachers_wishes.pack(side=RIGHT, padx=10, pady=10)
+        load_button_teachers_wishes_load = Button(frame_teachers_wishes_load, text="Загрузить",
+                                                  command=lambda: load_df('teachers_wishes'))
+        load_button_teachers_wishes_load.pack(side=RIGHT, padx=10, pady=10)
 
         # Сообщение о загрузке данных
         label_loaded_teachers_wishes = Label(frame_teachers_wishes, text=f'Загружены пожелания учителей', fg='#f0f0f0')
         label_loaded_teachers_wishes.pack(side=LEFT, padx=10, pady=10)
 
         # Лейбл с учителями
-        label_teacher = Label(frame_teachers_wishes_write, text=f'Учителя')
-        label_teacher.pack(side=LEFT, padx=10, pady=10)
+        label_teacher = Label(frame_teachers_wishes_write, text=f'Учитель')
+        label_teacher.grid(row=0, column=0, ipadx=6, ipady=6, padx=4, pady=4)
 
         # Поле ввода для имени учителя
         entry_t_w = ttk.Entry(frame_teachers_wishes_write)
-        entry_t_w.pack(side=LEFT, padx=6, pady=6)
+        entry_t_w.grid(row=1, column=0, ipadx=6, ipady=6, padx=4, pady=4)
 
         # Лейбл с интервалом
         label_interval = Label(frame_teachers_wishes_write, text=f'Время')
-        label_interval.pack(side=LEFT, padx=10, pady=10)
+        label_interval.grid(row=0, column=1, ipadx=6, ipady=6, padx=4, pady=4)
 
         # Поле ввода интервала
         entry_interval = ttk.Entry(frame_teachers_wishes_write)
-        entry_interval.pack(side=LEFT, padx=6, pady=6)
-        
+        entry_interval.grid(row=1, column=1, ipadx=6, ipady=6, padx=4, pady=4)
+
+        # Лейбл с уроком
+        label_is_lesson = Label(frame_teachers_wishes_write, text=f'Поставить ли урок')
+        label_is_lesson.grid(row=0, column=2, ipadx=6, ipady=6, padx=4, pady=4)
+
+        # Поле ввода урока
+        entry_is_lesson = ttk.Entry(frame_teachers_wishes_write)
+        entry_is_lesson.grid(row=1, column=2, ipadx=6, ipady=6, padx=4, pady=4)
+
+        # Кнопка загрузки пожеланий учителей введенных вручную
+        load_button_teachers_wishes_write = Button(frame_teachers_wishes_write, text="Загрузить",
+                                                   command=lambda: get_teacher_suggestions())
+        load_button_teachers_wishes_write.grid(row=0, column=3, ipadx=6, ipady=6, padx=4, pady=4, sticky=EW)
+
+        # TODO доделать расположение
+        def get_teacher_suggestions() -> None:
+            """
+            Функция добавления вручную введенных пожеланий учителей в ДатаФрейм
+            Считывание данных из окон ввода
+
+            """
+            # Введенные данные
+            entry = [entry_t_w.get(), entry_interval.get(), entry_is_lesson.get()]
+            # Если нет полноты введенных параметров
+            if not all(entry):
+                if messagebox.showinfo("Ошибка загрузки!", "Введите все начальные данные"):
+                    return
+
+            # Если пожелания не были загружены
+            if App.df_teachers_wishes.empty:
+
+                # Создадим ДатаФрейм
+                App.df_teachers_wishes = pd.DataFrame(columns=['teacher', 'interval', 'is_lesson'])
+
+            # Добавим строки в ДатаФрейм
+            App.df_teachers_wishes.loc[-1] = entry
+            App.df_teachers_wishes.index = App.df_teachers_wishes.index + 1
+            App.df_teachers_wishes = App.df_teachers_wishes.sort_index()
 
         def load_parameters_def() -> None:
             """
@@ -240,6 +277,7 @@ class App(Frame):
 
             # Вторая смена
             App.second_shift = second_shift_current
+            return
 
         # Кнопка загрузки параметров
         load_parameters = Button(tab_parameters, text="Сохранить параметры", command=lambda: load_parameters_def())
@@ -275,7 +313,7 @@ class App(Frame):
         # Проверка на полноту данных
         if App.df_teachers.empty or App.df_audiences.empty or App.df_academic_plan.empty or \
                 App.df_rings.empty or App.df_audiences_lessons.empty:
-            if messagebox.showinfo("Загрузить", "Введите все начальные данные"):
+            if messagebox.showinfo("Ошибка загрузки!", "Введите все начальные данные"):
                 return
 
         # Создаем объект класса расписание

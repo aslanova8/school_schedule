@@ -105,7 +105,8 @@ class Schedule:
 
         classes : tuple
             упорядоченный кортеж с классами
-
+        teachers : tuple
+            упорядоченный кортеж с учителями
 
         schedule_dict : dict
             текущий вариант расписания по шаблону
@@ -181,8 +182,8 @@ class Schedule:
                 intervals.append(str(Schedule.weekdays[i]) + ' ' + str(start_interval[j]) + ' ' + str(end_interval[j]))
 
         # Пустой шаблон расписания для заполнения
-        population = dict(zip(intervals, [{} for _ in range(len(intervals))]))
-        self.schedule_dict = population
+        self.schedule_dict = dict(zip(intervals, [{} for _ in range(len(intervals))]))
+        return
 
     def create_first_population(self) -> None:
         """
@@ -215,11 +216,11 @@ class Schedule:
         # Замена NaN в 2, 3, 4... строках для каждого класса
         self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
 
-        # Замена NaN в 2, 3, 4... строках для каждого учителя
-        self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
+        # Замена NaN в 2, 3, 4... строках для каждого учителя, если введены пожелания
+        if not self.df_teachers_wishes.empty:
+            self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
 
         # Распределение классов и интервалов на смены
-        second_shift = False
         count_less_per_day = len(self.schedule_dict) // self.number_of_days_in_week
         end_of_the_shift = count_less_per_day
 
@@ -391,6 +392,40 @@ class Schedule:
         # Окна у учителей
 
         # TODO: система проверок на существование расписания под требования пользователя
+
+    def krossingover(self):
+        pass
+
+    def inversion(self):
+        pass
+
+    def mutation(self, target_class: str) -> None:
+        """
+        Функция мутации
+
+        Параметры
+        ---------
+        target_class : str
+            Хромосома, ген в которой подвергнется мутации.
+            Класс, расписание которого будет меняться.
+        """
+        # Случайный интервал
+        interval = random.choice(self.schedule_dict.keys())
+        mut = True  # Флаг
+
+        while mut:
+            for audience, dictionary in self.schedule_dict[interval].items():
+                if dictionary['class'] == target_class:
+                    # Промутировать ген
+                    self.schedule_dict[interval][audience]['teacher'] = random.choice(self.teachers)
+                    self.schedule_dict[interval][audience]['lesson'] = random.choice(
+                        self.df_teachers.loc[
+                            self.df_teachers['teacher'] == self.schedule_dict[interval][audience]['teacher']]
+                        ['lesson'].to_list())
+                    mut = False
+                    break
+            else:
+                interval = random.choice(self.schedule_dict.keys())
 
     @staticmethod
     def schedule_dict_to_table(self) -> list:

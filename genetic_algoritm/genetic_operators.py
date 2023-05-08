@@ -33,7 +33,10 @@ class Schedule:
 
     classes : tuple
         Упорядоченный кортеж с классами
-
+    teachers : tuple
+        упорядоченный кортеж с учителями
+    intervals : tuple
+        упорядоченный кортеж с интервалами для уроков
 
     schedule_dict : dict
         Текущий вариант расписания по шаблону
@@ -107,6 +110,8 @@ class Schedule:
             упорядоченный кортеж с классами
         teachers : tuple
             упорядоченный кортеж с учителями
+        intervals : tuple
+            упорядоченный кортеж с интервалами для уроков
 
         schedule_dict : dict
             текущий вариант расписания по шаблону
@@ -147,6 +152,18 @@ class Schedule:
                               key=lambda x: int(x[:-1]))
         self.teachers = sorted(tuple(cl for cl in df_teachers['teacher'].unique()))
 
+        # Инициализация интервалов
+        # Преобразование начала и конца уроков в списки
+        end_interval = self.df_rings['end'].tolist()
+        start_interval = self.df_rings['begin'].tolist()
+
+        # Интервалы, в которые будут ставиться уроки
+        intervals = []
+        for i in range(self.number_of_days_in_week):
+            for j in range(len(start_interval)):
+                intervals.append(str(Schedule.weekdays[i]) + ' ' + str(start_interval[j]) + ' ' + str(end_interval[j]))
+        self.intervals = tuple(intervals)
+
         # Результат
         self.ga_cycle()
 
@@ -170,20 +187,8 @@ class Schedule:
         ---------------------
         None
         """
-
-        # Преобразуем начало и конец уроков в списки
-        end_interval = self.df_rings['end'].tolist()
-        start_interval = self.df_rings['begin'].tolist()
-
-        # Интервалы, в которые будут ставиться уроки
-        intervals = []
-        for i in range(self.number_of_days_in_week):
-            for j in range(len(start_interval)):
-                intervals.append(str(Schedule.weekdays[i]) + ' ' + str(start_interval[j]) + ' ' + str(end_interval[j]))
-
         # Пустой шаблон расписания для заполнения
-        self.schedule_dict = dict(zip(intervals, [{} for _ in range(len(intervals))]))
-        return
+        self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
 
     def create_first_population(self) -> None:
         """
@@ -205,13 +210,12 @@ class Schedule:
             """
 
             # Сохранили случайный интервал
-            intervals = list(self.schedule_dict.keys())
-            interval_index = random.randrange(len(intervals))
+            interval_index = random.randrange(len(self.intervals))
 
             # Пока не попали в смену
             while ((interval_index % count_less_per_day) > end_of_the_shift) != (class_shift[row['class']] - 1):
-                interval_index = random.randrange(len(intervals))
-            return intervals[interval_index]
+                interval_index = random.randrange(len(self.intervals))
+            return self.intervals[interval_index]
 
         # Замена NaN в 2, 3, 4... строках для каждого класса
         self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
@@ -396,12 +400,63 @@ class Schedule:
     def krossingover(self):
         pass
 
-    def inversion(self):
-        pass
+    def inversion(self, target_class: str) -> None:
+        """
+        Генетический оператор инверсии: разворачивает столбец расписания на 180 градусов
+        от начала недели до случайно выбранной точки.
+
+        Параметры
+        ---------
+        target_class : str
+            Хромосома, ген в которой подвергнется мутации.
+            Класс, расписание которого будет меняться.
+        """
+        # Начало участка обмена
+        start_interval = self.intervals[0]
+        start_interval_ind = 0
+
+        # Случайный интервал, конец участка обмена
+        end_interval = random.choice(list(self.schedule_dict.keys()))
+        end_interval_ind = self.intervals.index(end_interval)
+
+        # Обход с концов интервала инверсии к его середине
+        while start_interval_ind < end_interval_ind:
+            # Извлекаем ячейки правого и левого конца интервала
+            start_dict, end_dict = {}, {}
+
+            # TODO здесь могут быть накладки с кабинетами
+
+            # Извлекаем ячейку с target_class
+            for audience, dictionary in self.schedule_dict[start_interval].items():
+                if dictionary['class'] == target_class:
+                    start_dict[audience] = dictionary
+                    del self.schedule_dict[start_interval][audience]
+                    break
+            for audience, dictionary in self.schedule_dict[end_interval].items():
+                if dictionary['class'] == target_class:
+                    end_dict[audience] = dictionary
+                    del self.schedule_dict[end_interval][audience]
+                    break
+
+            # Ставим ячейку в новое место в таблице
+            if start_dict:
+                for audience, dictionary in start_dict:
+                    self.schedule_dict[end_interval][audience] = dictionary
+            if end_dict:
+                for audience, dictionary in end_dict:
+                    self.schedule_dict[start_interval][audience] = dictionary
+
+            # TODO оператор присваивания
+            # start_interval_ind += 1
+            # end_interval_ind -= 1
+            # start_interval = self.intervals[start_interval_ind]
+            # end_interval = self.intervals[end_interval_ind]
+            start_interval = self.intervals[start_interval_ind := start_interval_ind + 1]
+            end_interval = self.intervals[end_interval_ind := end_interval_ind - 1]
 
     def mutation(self, target_class: str) -> None:
         """
-        Функция мутации
+        Генетический оператор мутации: изменение случайно выбранного гена(ячейки расписания).
 
         Параметры
         ---------
@@ -410,7 +465,7 @@ class Schedule:
             Класс, расписание которого будет меняться.
         """
         # Случайный интервал
-        interval = random.choice(self.schedule_dict.keys())
+        interval = random.choice(list(self.schedule_dict.keys()))
         mut = True  # Флаг
 
         while mut:
@@ -425,7 +480,7 @@ class Schedule:
                     mut = False
                     break
             else:
-                interval = random.choice(self.schedule_dict.keys())
+                interval = random.choice(list(self.schedule_dict.keys()))
 
     @staticmethod
     def schedule_dict_to_table(self) -> list:

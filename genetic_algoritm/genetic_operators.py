@@ -209,8 +209,8 @@ class Schedule:
                 interval_index = random.randrange(len(self.intervals))
             return self.intervals[interval_index]
 
-        # # Пустой шаблон расписания для заполнения
-        # self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
+        # Пустой шаблон расписания для заполнения
+        self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
 
         # Замена NaN в 2, 3, 4... строках для каждого класса
         self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
@@ -342,12 +342,81 @@ class Schedule:
                 temp = {"class": sch_class, "lesson": lesson, "teacher": teacher}
                 self.schedule_dict[interval][audience] = temp
 
+    def fix_schedule(self) -> None:
+        """
+        Проверка расписания на консистентность и корректировка.
+        1. Соответствие учебному плану
+        2. Соответствие аудитории дисциплине
+        3. Непротиворечивость расписания учителей
+        4. Соответствие учителя дисциплине
+
+        Непротиворечивость расписания классов -> учтена за счет модели решения задачи.
+
+        Возвращаемое значение
+        ---------------------
+        None
+        """
+        # 1, 2, 4
+        self.create_first_population()
+        # 3
+        self.fix_teacher_inconsistencies()
+
+    def fix_teacher_inconsistencies(self) -> None:
+        """
+        Функция меняет местами ячейки расписания, которые нарушают логику учительского расписания.
+        Если учитель ведет урок в двух классах одновременно, ячейка арспсиания меняется местами со следующей ячейкой
+        текущего класса, чтобы накладки по учителям не было.
+
+        Возвращаемое значение
+        ---------------------
+        None
+        """
+        for interval in self.intervals:
+            teachers = dict()
+            for audience, dictionary in self.schedule_dict[interval].items():
+                # Учитель ведет 2 урока одновременно
+                if dictionary['teacher'] in teachers:
+                    # Замена со следующим геном хромосомы
+                    next_interval = self.intervals[self.intervals.index(interval) + 1]
+                    while True:
+                        # TODO накладка с кабинетами
+                        # TODO вторая смена
+
+                        # Ищем текущий класс в следующем интервале
+                        for next_audience, next_dictionary in self.schedule_dict[next_interval].items():
+                            if dictionary['class'] == next_dictionary['class']:
+
+                                if dictionary['teacher'] == next_dictionary['teacher']:
+                                    # Если учитель совпал, не смысла менять местами эти уроки
+                                    continue
+                                elif next_dictionary['teacher'] in teachers:
+                                    # Уроки разные, но этот учитель уже ведет урок
+                                    continue
+                                else:
+                                    self.schedule_dict[interval][next_audience] = next_dictionary
+                                    self.schedule_dict[next_interval][audience] = dictionary
+                                    del self.schedule_dict[interval][audience]
+                                    del self.schedule_dict[next_interval][next_audience]
+                                    teachers[dictionary['teacher']] = next_audience
+                                break
+                        else:
+                            # Следующая ячейка пуста
+                            # Занимаем ее
+                            self.schedule_dict[next_interval][audience] = dictionary
+                            del self.schedule_dict[interval][audience]
+                            teachers[dictionary['teacher']] = next_audience
+
+                # Учитель ведет один урок в этот промежуток времени
+                else:
+                    # Сохраняем и аудиторию, чтобы в случае наложения расписания быстро найти место замены
+                    teachers[dictionary['teacher']] = audience
+
     def classic_ga(self) -> None:
         """
         Основная логика классического генетического алгоритма:
 
         ПЕРВОЕ ПОКОЛЕНИЕ
-        1. Первая популяция составляется случайным образом. --- Функция составления расписания рандомно.
+        1. Первая популяция составляется случайным образом.
         2. Проверка расписания на консистентность и корректировка. --- Функция исправления.
            Оценка приспособленности и запись значений функции для каждой особи.
 
@@ -360,7 +429,9 @@ class Schedule:
         ---------------------
         None
         """
+        # 1. Первая популяция составляется случайным образом.
         self.create_first_population_randomly()
+
         self.schedule_dict_to_table(self)
         # self.classic_ga_target_function()
 

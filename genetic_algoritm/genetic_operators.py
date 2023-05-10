@@ -364,26 +364,68 @@ class Schedule:
     def fix_teacher_inconsistencies(self) -> None:
         """
         Функция меняет местами ячейки расписания, которые нарушают логику учительского расписания.
-        Если учитель ведет урок в двух классах одновременно, ячейка арспсиания меняется местами со следующей ячейкой
+        Если учитель ведет урок в двух классах одновременно, ячейка расписания меняется местами со следующей ячейкой
         текущего класса, чтобы накладки по учителям не было.
 
         Возвращаемое значение
         ---------------------
         None
         """
+        def get_next_interval(interval, sch_class) -> str:
+            """
+            Возвращает время для следующего урока в нужную смену.
+
+            Возвращаемое значение
+            ---------------------
+            str
+                строка вида 'WD HH:MM:SS-HH:MM:SS'
+            """
+            # Распределение классов и интервалов на смены
+            count_less_per_day = len(self.intervals) // self.number_of_days_in_week
+            end_of_the_shift = count_less_per_day
+
+            if self.second_shift:
+                # Конец первой смены
+                end_of_the_shift = (end_of_the_shift - 1) // 2
+
+            # Сохранили случайный интервал
+            interval_index = self.intervals.index(interval) + 1
+
+            # Пока не попали в смену
+            while ((interval_index % count_less_per_day) > end_of_the_shift) != (class_shift[sch_class] - 1):
+                interval_index = (interval_index + 1) % len(self.intervals)
+            return self.intervals[interval_index]
+
+        # Распределение классов и интервалов на смены
+        count_less_per_day = len(self.intervals) // self.number_of_days_in_week
+        end_of_the_shift = count_less_per_day
+
+        # Словарь {класс: смена}
+        class_shift = dict(zip(self.classes, [1 for _ in self.classes]))
+
+        # Распределение классов по сменам в случае наличия второй смены
+        if self.second_shift:
+
+            # Стандарт распределения классов на смены
+            shift_standart = {1: False, 2: True, 3: True, 4: True, 5: False, 6: True, 7: True, 8: True, 9: False,
+                              10: False, 11: False}
+            for clas in class_shift.keys():
+                class_shift[clas] = shift_standart[int(clas[:-1])] + 1
+
+
         for interval in self.intervals:
             teachers = dict()
-            for audience, dictionary in self.schedule_dict[interval].items():
+            for audience, dictionary in self.schedule_dict[interval].copy().items():
                 # Учитель ведет 2 урока одновременно
                 if dictionary['teacher'] in teachers:
                     # Замена со следующим геном хромосомы
-                    next_interval = self.intervals[self.intervals.index(interval) + 1]
-                    while True:
-                        # TODO накладка с кабинетами
-                        # TODO вторая смена
-
+                    next_interval = get_next_interval(interval, dictionary['class'])
+                    fixed = False
+                    while not fixed:
+                        if interval == next_interval:
+                            break
                         # Ищем текущий класс в следующем интервале
-                        for next_audience, next_dictionary in self.schedule_dict[next_interval].items():
+                        for next_audience, next_dictionary in self.schedule_dict[next_interval].copy().items():
                             if dictionary['class'] == next_dictionary['class']:
 
                                 if dictionary['teacher'] == next_dictionary['teacher']:
@@ -391,21 +433,26 @@ class Schedule:
                                     continue
                                 elif next_dictionary['teacher'] in teachers:
                                     # Уроки разные, но этот учитель уже ведет урок
-                                    continue
+                                    break
                                 else:
                                     self.schedule_dict[interval][next_audience] = next_dictionary
                                     self.schedule_dict[next_interval][audience] = dictionary
-                                    del self.schedule_dict[interval][audience]
-                                    del self.schedule_dict[next_interval][next_audience]
-                                    teachers[dictionary['teacher']] = next_audience
+                                    if audience in self.schedule_dict[interval]:
+                                        del self.schedule_dict[interval][audience]
+                                    if next_audience in self.schedule_dict[next_interval]:
+                                        del self.schedule_dict[next_interval][next_audience]
+                                    teachers[next_dictionary['teacher']] = next_audience
+                                    fixed = True
                                 break
                         else:
                             # Следующая ячейка пуста
                             # Занимаем ее
                             self.schedule_dict[next_interval][audience] = dictionary
-                            del self.schedule_dict[interval][audience]
+                            if audience in self.schedule_dict[interval]:
+                                del self.schedule_dict[interval][audience]
                             teachers[dictionary['teacher']] = next_audience
-
+                            fixed = True
+                        next_interval = get_next_interval(next_interval, dictionary['class'])
                 # Учитель ведет один урок в этот промежуток времени
                 else:
                     # Сохраняем и аудиторию, чтобы в случае наложения расписания быстро найти место замены
@@ -417,7 +464,7 @@ class Schedule:
 
         ПЕРВОЕ ПОКОЛЕНИЕ
         1. Первая популяция составляется случайным образом.
-        2. Проверка расписания на консистентность и корректировка. --- Функция исправления.
+        2. Проверка расписания на консистентность и корректировка.
            Оценка приспособленности и запись значений функции для каждой особи.
 
         ВТОРОЕ И ПОСЛЕДУЮЩИЕ ПОКОЛЕНИЯ
@@ -431,6 +478,8 @@ class Schedule:
         """
         # 1. Первая популяция составляется случайным образом.
         self.create_first_population_randomly()
+        # 2. Проверка расписания на консистентность и корректировка.
+        self.fix_schedule()
 
         self.schedule_dict_to_table(self)
         # self.classic_ga_target_function()

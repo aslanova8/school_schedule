@@ -37,6 +37,10 @@ class Schedule:
         упорядоченный кортеж с учителями
     intervals : tuple
         упорядоченный кортеж с интервалами для уроков
+    audiences: tuple
+        упорядоченный кортеж с аудиториями
+    lessons: tuple
+        упорядоченный кортеж с уроками
 
     schedule_dict : dict
         Текущий вариант расписания по шаблону
@@ -156,6 +160,8 @@ class Schedule:
         self.classes = sorted(tuple(cl for cl in df_academic_plan['class'].unique() if cl == cl),
                               key=lambda x: int(x[:-1]))
         self.teachers = sorted(tuple(cl for cl in df_teachers['teacher'].unique()))
+        self.lessons = sorted(tuple(lesson for lesson in df_academic_plan['lesson'].unique()))
+        self.audiences = sorted(tuple(str(audience) for audience in df_audiences['audience'].unique()))
 
         # Инициализация интервалов
         # Преобразование начала и конца уроков в списки
@@ -169,11 +175,11 @@ class Schedule:
                 intervals.append(str(Schedule.weekdays[i]) + ' ' + str(start_interval[j]) + ' ' + str(end_interval[j]))
         self.intervals = tuple(intervals)
 
-        # Результат
-        self.classic_ga()
-
         # Пустой шаблон расписания для заполнения
         self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
+
+        # Результат
+        self.classic_ga()
 
     def create_first_population(self) -> None:
         """
@@ -203,6 +209,9 @@ class Schedule:
                 interval_index = random.randrange(len(self.intervals))
             return self.intervals[interval_index]
 
+        # # Пустой шаблон расписания для заполнения
+        # self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
+
         # Замена NaN в 2, 3, 4... строках для каждого класса
         self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
 
@@ -211,7 +220,7 @@ class Schedule:
             self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
 
         # Распределение классов и интервалов на смены
-        count_less_per_day = len(self.schedule_dict) // self.number_of_days_in_week
+        count_less_per_day = len(self.intervals) // self.number_of_days_in_week
         end_of_the_shift = count_less_per_day
 
         # Словарь {класс: смена}
@@ -297,12 +306,54 @@ class Schedule:
                         # Меняем время занятия
                         interval = get_interval()
 
+    def create_first_population_randomly(self) -> None:
+        """
+        Создает расписание cлучайным образом.
+
+        Возвращаемое значение
+        ---------------------
+        None
+        """
+
+        # Замена NaN в 2, 3, 4... строках для каждого класса
+        self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
+
+        # Замена NaN в 2, 3, 4... строках для каждого учителя, если введены пожелания
+        if not self.df_teachers_wishes.empty:
+            self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
+
+        # Распаковка дата фрейма для учителей
+        for i, row in self.df_teachers.iterrows():
+            self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
+        self.df_teachers = self.df_teachers.explode('lesson')
+
+        for interval in self.intervals:
+            for sch_class in self.classes:
+                # Случайный выбор аудитории
+                audience = random.choice(self.audiences)
+
+                # Случайный выбор урока
+                lesson = random.choice(self.lessons)
+
+                # Случайный выбор учителя
+                teacher = random.choice(self.teachers)
+
+                # Формирование ячейки расписания
+                temp = {"class": sch_class, "lesson": lesson, "teacher": teacher}
+
     def classic_ga(self) -> None:
         """
-        Основная логика классического генетического алгоритма.:
+        Основная логика классического генетического алгоритма:
 
-        1. Первая популяция.
-        2. Целевая функция и преобразование расписания.
+        ПЕРВОЕ ПОКОЛЕНИЕ
+        1. Первая популяция составляется случайным образом. --- Функция составления расписания рандомно.
+        2. Проверка расписания на консистентность и корректировка. --- Функция исправления.
+           Оценка приспособленности и запись значений функции для каждой особи.
+
+        ВТОРОЕ И ПОСЛЕДУЮЩИЕ ПОКОЛЕНИЯ
+        3. Генетические операторы
+        2. Проверка расписания на консистентность и корректировка.
+           Оценка приспособленности и запись значений функции для каждой особи.
 
         Возвращаемое значение
         ---------------------

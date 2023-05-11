@@ -209,6 +209,24 @@ class Schedule:
                 interval_index = random.randrange(len(self.intervals))
             return self.intervals[interval_index]
 
+        def is_lesson_at_this_interval(interval: str, sch_class: str) -> bool:
+            """
+            Функция возвращает True, если в interval у sch_class есть урок.
+            False  в ином случае.
+
+            Параметры
+            ---------
+            interval : str
+                Временной промежуток.
+            sch_class : str
+                Класс, урок которого ищется.
+            """
+            for audience, dictionary in self.schedule_dict[interval].items():
+                if dictionary['class'] == sch_class:
+                    return True
+
+            return False
+
         # Пустой шаблон расписания для заполнения
         self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
 
@@ -271,6 +289,9 @@ class Schedule:
 
                 # Выбор случайного интервала
                 interval = get_interval()
+                # Занят ли этот интервал этим классом
+                while is_lesson_at_this_interval(interval, temp['class']):
+                    interval = get_interval()
 
                 # Цикл поиска для текущего урока
                 while look_for_item and count:
@@ -286,6 +307,9 @@ class Schedule:
 
                                 # Тогда меняем время занятия
                                 interval = get_interval()
+                                # Занят ли этот интервал этим классом
+                                while not is_lesson_at_this_interval(interval, temp['class']):
+                                    interval = get_interval()
                                 break
                             else:
 
@@ -305,6 +329,9 @@ class Schedule:
 
                         # Меняем время занятия
                         interval = get_interval()
+                        # Занят ли этот интервал этим классом
+                        while is_lesson_at_this_interval(interval, temp['class']):
+                            interval = get_interval()
 
     def create_first_population_randomly(self) -> None:
         """
@@ -359,7 +386,7 @@ class Schedule:
         # 1, 2, 4
         self.create_first_population()
         # 3
-        self.fix_teacher_inconsistencies()
+        # self.fix_teacher_inconsistencies()
 
     def fix_teacher_inconsistencies(self) -> None:
         """

@@ -399,6 +399,7 @@ class Schedule:
         ---------------------
         None
         """
+
         def get_next_interval(interval, sch_class) -> str:
             """
             Возвращает время для следующего урока в нужную смену.
@@ -489,7 +490,6 @@ class Schedule:
                                         # Если аудитория не нашлась
                                         continue
 
-
                                     # Меняем местами ячейки расписания
                                     self.schedule_dict[interval][aud] = next_dictionary
                                     self.schedule_dict[next_interval][next_aud] = dictionary
@@ -547,6 +547,8 @@ class Schedule:
         # Оценка приспособленности и запись значений функции для каждой особи.
         cur_score = self.classic_ga_target_function(50, 50)
         score.append(cur_score)
+
+        # Запись функций приспособленности в файл
         f = open("score.txt", "w")
         for sc in score:
             f.write(' '.join(list(map(str, sc))))
@@ -577,21 +579,14 @@ class Schedule:
 
         self.classic_ga_target_function()
 
-    def classic_ga_target_function(self, window_fine: int, teacher_fine: int) -> tuple:
+    def class_window_finder(self) -> tuple:
         """
-        Целевая функция, оценивающая расписание. Сохраняет преобразованное расписание
-        в schedule_dict и schedule_list.
-
+        Возвращает количество окон по классам.
         Возвращаемое значение
         ---------------------
-        int
-            Оценка приспособленности
+        tuple
+            ((индекс_интервала, индекс_класса), ...)
         """
-        self.schedule_list = self.schedule_dict_to_table(self)
-        score = 0
-        score_tuple = tuple()
-        # TODO Разделить на подфункции
-        # Окна у классов
         windows = set()
 
         # Конец смены
@@ -610,7 +605,7 @@ class Schedule:
             for ind_interval, interval in enumerate(self.schedule_list):
 
                 # Новый день или новая смена
-                if ind_interval % (len(self.intervals) // self.number_of_days_in_week) == 0\
+                if ind_interval % (len(self.intervals) // self.number_of_days_in_week) == 0 \
                         or ind_interval % (len(self.intervals) // self.number_of_days_in_week) == end_of_the_shift + 1:
                     is_prev_lesson = False
                     today_lessons = False
@@ -630,15 +625,85 @@ class Schedule:
                 # Урока не было, сейчас есть, но уроки уже были сегодня
                 elif today_lessons:
                     # Окно
-                    score += window_fine
-                    windows.add((ind_interval-1, ind_class))
+                    windows.add((ind_interval - 1, ind_class))
 
                 # Уроков не было, но начались
                 else:
                     today_lessons = True
-            score_tuple = score_tuple + (score,)
-        # Учитель не ведет >1 урока в одно время
+        return windows
 
+    def teacher_window_finder(self) -> tuple:
+        """
+        Возвращает количество окон по учителям.
+        Возвращаемое значение
+        ---------------------
+        tuple
+            ((индекс_интервала, индекс_класса), ...)
+        """
+        windows = set()
+
+        for ind_teacher, teacher in enumerate(self.schedule_list_teacher[0]):
+            # Предыдущий интервал занят
+            is_prev_lesson = False
+            is_curr_lesson = False
+            # Были ли сегодня уроки
+            today_lessons = False
+            score = 0
+            for ind_interval, interval in enumerate(self.schedule_list_teacher):
+
+                # Новый день или новая смена
+                if ind_interval % (len(self.intervals) // self.number_of_days_in_week) == 0:
+                    is_prev_lesson = False
+                    today_lessons = False
+                else:
+                    is_prev_lesson = is_curr_lesson
+
+                is_curr_lesson = bool(interval[ind_teacher])
+
+                # Предыдущий интервал занят, т.е. уроки продолжились или закончились
+                if is_prev_lesson:
+                    continue
+
+                # Сейчас урока нет, до этого тоже
+                elif not interval[ind_teacher]:
+                    continue
+
+                # Урока не было, сейчас есть, но уроки уже были сегодня
+                elif today_lessons:
+                    # Окно
+                    windows.add((ind_interval - 1, ind_teacher))
+
+                # Уроков не было, но начались
+                else:
+                    today_lessons = True
+        return windows
+
+    def classic_ga_target_function(self, window_fine: int, teacher_fine: int) -> tuple:
+        """
+        Целевая функция, оценивающая расписание. Сохраняет преобразованное расписание
+        в schedule_dict и schedule_list.
+
+        Возвращаемое значение
+        ---------------------
+        int
+            Оценка приспособленности
+        """
+        self.schedule_dict_to_table(self)
+        score = 0
+        score_tuple = tuple()
+
+        # Окна у классов
+        windows = self.class_window_finder()
+        score += window_fine * len(windows)
+        score_tuple = score_tuple + (score,)
+
+        # Окна у учителей
+        score = 0
+        windows = self.teacher_window_finder()
+        score += teacher_fine * len(windows)
+        score_tuple = score_tuple + (score,)
+
+        # Учитель не ведет >1 урока в одно время
         # data_teachers = [['' for _ in self.teachers]
         #                  for _ in range(len(self.schedule_dict))]
         #
@@ -654,9 +719,9 @@ class Schedule:
         #             # Учитель ведет >1 урока в одно время
         #             score += teacher_fine
         #             continue
-        # Окна у учителей
 
         # TODO: система проверок на существование расписания под требования пользователя
+
         return score_tuple
 
     def classic_ga_krossingover(self, target_class1: str, target_class2: str) -> None:
@@ -786,13 +851,13 @@ class Schedule:
                 interval = random.choice(list(self.schedule_dict.keys()))
 
     @staticmethod
-    def schedule_dict_to_table(self) -> list:
+    def schedule_dict_to_table(self) -> None:
         """
         Преобразование расписания в прямоугольную таблицу.
 
         Возвращаемое значение
         ---------------------
-        list
+        None
         """
 
         # Шаблон прямоугольной таблицы без заголовков строк и столбцов
@@ -808,4 +873,17 @@ class Schedule:
                 data_pupils[interval_i][self.classes.index(school_class)] = item
 
         self.schedule_list = data_pupils
-        return self.schedule_list
+
+        # Шаблон прямоугольной таблицы без заголовков строк и столбцов
+        data_teachers = [['' for _ in range(len(self.teachers))]
+                         for _ in range(len(self.schedule_dict))]
+
+        for interval_i, interval in enumerate(self.schedule_dict):
+            for audience in self.schedule_dict[interval]:
+                school_class = self.schedule_dict[interval][audience]['class']
+                lesson = self.schedule_dict[interval][audience]['lesson']
+                teacher = self.schedule_dict[interval][audience]['teacher']
+                item = str(lesson) + '\n' + str(school_class) + '\n' + str(audience)
+                data_teachers[interval_i][self.teachers.index(teacher)] = item
+
+        self.schedule_list_teacher = data_teachers

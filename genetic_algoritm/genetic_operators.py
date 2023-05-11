@@ -1,4 +1,5 @@
 import random
+from turtle import pos
 
 
 class Schedule:
@@ -386,7 +387,7 @@ class Schedule:
         # 1, 2, 4
         self.create_first_population()
         # 3
-        # self.fix_teacher_inconsistencies()
+        self.fix_teacher_inconsistencies()
 
     def fix_teacher_inconsistencies(self) -> None:
         """
@@ -423,9 +424,23 @@ class Schedule:
                 interval_index = (interval_index + 1) % len(self.intervals)
             return self.intervals[interval_index]
 
-        # Распределение классов и интервалов на смены
-        count_less_per_day = len(self.intervals) // self.number_of_days_in_week
-        end_of_the_shift = count_less_per_day
+        def find_free_audience(interval: str, lesson: str) -> str:
+            # TODO документация
+            # Выбор типа аудитории
+            required_type_audience = self.df_audiences_lessons.loc[self.df_audiences_lessons['lesson']
+                                                                   == lesson].iloc[0]['type']
+            possible_audiences = self.df_audiences.loc[self.df_audiences['type']
+                                                       == required_type_audience]['audience'].to_list()
+            # Перемешали, чтоб рассаживать в разные аудитории,
+            # но исключить повторный выбор аудиторий за счет итерирования
+            random.shuffle(possible_audiences)
+            for audience in self.schedule_dict[interval].keys():
+                if audience in possible_audiences:
+                    possible_audiences.remove(audience)
+            if possible_audiences:
+                return possible_audiences[0]
+            else:
+                return ''
 
         # Словарь {класс: смена}
         class_shift = dict(zip(self.classes, [1 for _ in self.classes]))
@@ -438,7 +453,6 @@ class Schedule:
                               10: False, 11: False}
             for clas in class_shift.keys():
                 class_shift[clas] = shift_standart[int(clas[:-1])] + 1
-
 
         for interval in self.intervals:
             teachers = dict()
@@ -462,22 +476,40 @@ class Schedule:
                                     # Уроки разные, но этот учитель уже ведет урок
                                     break
                                 else:
-                                    self.schedule_dict[interval][next_audience] = next_dictionary
-                                    self.schedule_dict[next_interval][audience] = dictionary
+                                    # Нужно подобрать свободные аудитории для interval и next_interval
+                                    aud = find_free_audience(interval, next_dictionary['lesson'])
+                                    if not aud:
+                                        # Если аудитория не нашлась
+                                        continue
+
+                                    next_aud = find_free_audience(next_interval, dictionary['lesson'])
+                                    if not next_aud:
+                                        # Если аудитория не нашлась
+                                        continue
+
+
+                                    # Меняем местами ячейки расписания
+                                    self.schedule_dict[interval][aud] = next_dictionary
+                                    self.schedule_dict[next_interval][next_aud] = dictionary
                                     if audience in self.schedule_dict[interval]:
                                         del self.schedule_dict[interval][audience]
                                     if next_audience in self.schedule_dict[next_interval]:
                                         del self.schedule_dict[next_interval][next_audience]
-                                    teachers[next_dictionary['teacher']] = next_audience
+                                    teachers[next_dictionary['teacher']] = aud
                                     fixed = True
                                 break
                         else:
                             # Следующая ячейка пуста
                             # Занимаем ее
-                            self.schedule_dict[next_interval][audience] = dictionary
+                            next_aud = find_free_audience(next_interval, dictionary['lesson'])
+                            if not next_aud:
+                                # Если аудитория не нашлась
+                                continue
+
+                            self.schedule_dict[next_interval][next_aud] = dictionary
                             if audience in self.schedule_dict[interval]:
                                 del self.schedule_dict[interval][audience]
-                            teachers[dictionary['teacher']] = next_audience
+                            teachers[dictionary['teacher']] = aud
                             fixed = True
                         next_interval = get_next_interval(next_interval, dictionary['class'])
                 # Учитель ведет один урок в этот промежуток времени

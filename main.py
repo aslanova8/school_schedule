@@ -371,14 +371,29 @@ class App(Frame):
 
         tree.pack(fill=BOTH, expand=1)
 
-        def save_schedule_def(schedule_table: list) -> None:
-            df = pd.DataFrame(schedule_table)
+        def save_schedule_def(self) -> None:
+            """
+            Сохранить расписание для классов и учителей в файл.
+            """
+            table = []
+            for interval_num, interval in enumerate(self.schedule_obj.schedule_dict):
+                table.append((interval,) + tuple(self.schedule_obj.schedule_list[interval_num]))
+
+            df = pd.DataFrame(table)
             df.columns = [''] + list(self.schedule_obj.classes)
-            # TODO: Добавить другие типы файлов
             df.to_excel('./schedule.xlsx', sheet_name='Budgets', index=False)
 
+            table = []
+            for interval_num, interval in enumerate(self.schedule_obj.schedule_dict):
+                table.append((interval,) + tuple(self.schedule_obj.schedule_list_teacher[interval_num]))
+
+            df = pd.DataFrame(table)
+            df.columns = [''] + list(self.schedule_obj.teachers)
+            df.to_excel('./schedule_for_teachers.xlsx', sheet_name='Budgets', index=False)
+            # TODO: Добавить другие типы файлов
+
         # Кнопка загрузки
-        save_schedule = Button(tab, text='Сохранить', command=lambda: save_schedule_def(table))
+        save_schedule = Button(tab, text='Сохранить', command=lambda: save_schedule_def(self))
         save_schedule.pack(fill=NONE, expand=1)
         return
 

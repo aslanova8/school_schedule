@@ -425,7 +425,9 @@ class Schedule:
             return self.intervals[interval_index]
 
         def find_free_audience(interval: str, lesson: str) -> str:
-            # TODO документация
+            """
+            Функция возвращает аудиторию, которая свободная в interval и подходит для проведения урока lesson.
+            """
             # Выбор типа аудитории
             required_type_audience = self.df_audiences_lessons.loc[self.df_audiences_lessons['lesson']
                                                                    == lesson].iloc[0]['type']
@@ -509,7 +511,7 @@ class Schedule:
                             self.schedule_dict[next_interval][next_aud] = dictionary
                             if audience in self.schedule_dict[interval]:
                                 del self.schedule_dict[interval][audience]
-                            teachers[dictionary['teacher']] = aud
+
                             fixed = True
                         next_interval = get_next_interval(next_interval, dictionary['class'])
                 # Учитель ведет один урок в этот промежуток времени
@@ -535,13 +537,22 @@ class Schedule:
         ---------------------
         None
         """
+        # Оценки приспособленности поколений
+        score = list()
+
         # 1. Первая популяция составляется случайным образом.
         self.create_first_population_randomly()
         # 2. Проверка расписания на консистентность и корректировка.
         self.fix_schedule()
+        # Оценка приспособленности и запись значений функции для каждой особи.
+        cur_score = self.classic_ga_target_function(50, 50)
+        score.append(cur_score)
+        f = open("score.txt", "w")
+        for sc in score:
+            f.write(' '.join(list(map(str, sc))))
+        f.close()
 
         self.schedule_dict_to_table(self)
-        # self.classic_ga_target_function()
 
     def modification_ga(self) -> None:
         # TODO исправить документацию
@@ -566,18 +577,20 @@ class Schedule:
 
         self.classic_ga_target_function()
 
-    def classic_ga_target_function(self) -> None:
+    def classic_ga_target_function(self, window_fine: int, teacher_fine: int) -> tuple:
         """
         Целевая функция, оценивающая расписание. Сохраняет преобразованное расписание
         в schedule_dict и schedule_list.
 
         Возвращаемое значение
         ---------------------
-        None
+        int
+            Оценка приспособленности
         """
         self.schedule_list = self.schedule_dict_to_table(self)
-
-        # Разделить на подфункции
+        score = 0
+        score_tuple = tuple()
+        # TODO Разделить на подфункции
         # Окна у классов
         windows = set()
 
@@ -590,48 +603,61 @@ class Schedule:
         for ind_class, school_class in enumerate(self.schedule_list[0]):
             # Предыдущий интервал занят
             is_prev_lesson = False
-
+            is_curr_lesson = False
             # Были ли сегодня уроки
             today_lessons = False
-
+            score = 0
             for ind_interval, interval in enumerate(self.schedule_list):
-                # Новый день
-                if ind_interval % end_of_the_shift == 0:
+
+                # Новый день или новая смена
+                if ind_interval % (len(self.intervals) // self.number_of_days_in_week) == 0\
+                        or ind_interval % (len(self.intervals) // self.number_of_days_in_week) == end_of_the_shift + 1:
                     is_prev_lesson = False
                     today_lessons = False
-                # Предыдущий интервал занят
+                else:
+                    is_prev_lesson = is_curr_lesson
+
+                is_curr_lesson = bool(interval[ind_class])
+
+                # Предыдущий интервал занят, т.е. уроки продолжились или закончились
                 if is_prev_lesson:
                     continue
-                # Сейчас урока нет
+
+                # Сейчас урока нет, до этого тоже
                 elif not interval[ind_class]:
                     continue
+
                 # Урока не было, сейчас есть, но уроки уже были сегодня
                 elif today_lessons:
                     # Окно
-                    windows.add((ind_interval, ind_class))
+                    score += window_fine
+                    windows.add((ind_interval-1, ind_class))
+
                 # Уроков не было, но начались
                 else:
                     today_lessons = True
-
+            score_tuple = score_tuple + (score,)
         # Учитель не ведет >1 урока в одно время
 
-        data_teachers = [['' for _ in self.teachers]
-                         for _ in range(len(self.schedule_dict))]
-
-        for interval_i, interval in enumerate(self.schedule_dict):
-            for audience in self.schedule_dict[interval]:
-                school_class = self.schedule_dict[interval][audience]['class']
-                lesson = self.schedule_dict[interval][audience]['lesson']
-                teacher = self.teachers.index(self.schedule_dict[interval][audience]['teacher'])
-                item = str(lesson) + ' ' + str(school_class) + ' ' + str(audience)
-                if not data_teachers[interval_i][teacher]:
-                    data_teachers[interval_i][teacher] = item
-                else:
-                    # Учитель ведет >1 урока в одно время
-                    continue
+        # data_teachers = [['' for _ in self.teachers]
+        #                  for _ in range(len(self.schedule_dict))]
+        #
+        # for interval_i, interval in enumerate(self.schedule_dict):
+        #     for audience in self.schedule_dict[interval]:
+        #         school_class = self.schedule_dict[interval][audience]['class']
+        #         lesson = self.schedule_dict[interval][audience]['lesson']
+        #         teacher = self.teachers.index(self.schedule_dict[interval][audience]['teacher'])
+        #         item = str(lesson) + ' ' + str(school_class) + ' ' + str(audience)
+        #         if not data_teachers[interval_i][teacher]:
+        #             data_teachers[interval_i][teacher] = item
+        #         else:
+        #             # Учитель ведет >1 урока в одно время
+        #             score += teacher_fine
+        #             continue
         # Окна у учителей
 
         # TODO: система проверок на существование расписания под требования пользователя
+        return score_tuple
 
     def classic_ga_krossingover(self, target_class1: str, target_class2: str) -> None:
         """

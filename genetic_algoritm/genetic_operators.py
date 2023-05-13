@@ -1,5 +1,5 @@
 import random
-from turtle import pos
+import time
 
 
 class Schedule:
@@ -84,6 +84,8 @@ class Schedule:
          Преобразует расписание в таблицу и заполняет атрибут schedule_list для вывода в приложение.
     """
     weekdays = ('ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС')
+    shift_standart = {1: False, 2: True, 3: True, 4: True, 5: False, 6: True, 7: True, 8: True, 9: False,
+                      10: False, 11: False}
 
     def __init__(self, df_academic_plan, df_teachers, df_audiences_lessons, df_audiences, df_rings, df_teachers_wishes,
                  number_of_days_in_week, second_shift):
@@ -164,6 +166,11 @@ class Schedule:
         self.lessons = sorted(tuple(lesson for lesson in df_academic_plan['lesson'].unique()))
         self.audiences = sorted(tuple(str(audience) for audience in df_audiences['audience'].unique()))
 
+        # Распаковка дата фрейма для учителей
+        for i, row in self.df_teachers.iterrows():
+            self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
+        self.df_teachers = self.df_teachers.explode('lesson')
+
         # Инициализация интервалов
         # Преобразование начала и конца уроков в списки
         end_interval = self.df_rings['end'].tolist()
@@ -210,7 +217,7 @@ class Schedule:
                 interval_index = random.randrange(len(self.intervals))
             return self.intervals[interval_index]
 
-        def is_lesson_at_this_interval(interval: str, sch_class: str) -> bool:
+        def is_lesson_at_this_interval(time_interval: str, sch_class: str) -> bool:
             """
             Функция возвращает True, если в interval у sch_class есть урок.
             False  в ином случае.
@@ -222,7 +229,7 @@ class Schedule:
             sch_class : str
                 Класс, урок которого ищется.
             """
-            for audience, dictionary in self.schedule_dict[interval].items():
+            for dictionary in self.schedule_dict[time_interval].values():
                 if dictionary['class'] == sch_class:
                     return True
 
@@ -248,19 +255,12 @@ class Schedule:
         # Распределение классов по сменам в случае наличия второй смены
         if self.second_shift:
 
-            # Стандарт распределения классов на смены
-            shift_standart = {1: False, 2: True, 3: True, 4: True, 5: False, 6: True, 7: True, 8: True, 9: False,
-                              10: False, 11: False}
             for clas in class_shift.keys():
-                class_shift[clas] = shift_standart[int(clas[:-1])] + 1
+                class_shift[clas] = self.shift_standart[int(clas[:-1])] + 1
 
             # Конец первой смены
             end_of_the_shift = (end_of_the_shift - 1) // 2
 
-        # Распаковка дата фрейма для учителей
-        for i, row in self.df_teachers.iterrows():
-            self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
-        self.df_teachers = self.df_teachers.explode('lesson')
         for index, row in self.df_academic_plan.iterrows():
 
             # Количество данных уроков на неделе
@@ -280,7 +280,7 @@ class Schedule:
 
             # Выбор учителя
             possible_teachers = self.df_teachers.loc[self.df_teachers['lesson'] == row['lesson']]['teacher'].to_list()
-            temp["teacher"] = possible_teachers[random.randrange(len(possible_teachers))]
+            temp["teacher"] = random.choice(possible_teachers)
 
             # Для каждого из этого урока в данном классе
             for _ in range(count):
@@ -336,7 +336,7 @@ class Schedule:
 
     def create_first_population_randomly(self) -> None:
         """
-        Создает расписание cлучайным образом.
+        Создает расписание случайным образом.
 
         Возвращаемое значение
         ---------------------
@@ -350,10 +350,10 @@ class Schedule:
         if not self.df_teachers_wishes.empty:
             self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
 
-        # Распаковка дата фрейма для учителей
-        for i, row in self.df_teachers.iterrows():
-            self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
-        self.df_teachers = self.df_teachers.explode('lesson')
+        # # Распаковка дата фрейма для учителей
+        # for i, row in self.df_teachers.iterrows():
+        #     self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
+        # self.df_teachers = self.df_teachers.explode('lesson')
 
         for interval in self.intervals:
             for sch_class in self.classes:
@@ -400,7 +400,7 @@ class Schedule:
         None
         """
 
-        def get_next_interval(interval, sch_class) -> str:
+        def get_next_interval(current_interval, sch_class) -> str:
             """
             Возвращает время для следующего урока в нужную смену.
 
@@ -418,14 +418,14 @@ class Schedule:
                 end_of_the_shift = (end_of_the_shift - 1) // 2
 
             # Сохранили случайный интервал
-            interval_index = self.intervals.index(interval) + 1
+            interval_index = self.intervals.index(current_interval) + 1
 
             # Пока не попали в смену
             while ((interval_index % count_less_per_day) > end_of_the_shift) != (class_shift[sch_class] - 1):
                 interval_index = (interval_index + 1) % len(self.intervals)
             return self.intervals[interval_index]
 
-        def find_free_audience(interval: str, lesson: str) -> str:
+        def find_free_audience(current_interval: str, lesson: str) -> str:
             """
             Функция возвращает аудиторию, которая свободная в interval и подходит для проведения урока lesson.
             """
@@ -434,16 +434,26 @@ class Schedule:
                                                                    == lesson].iloc[0]['type']
             possible_audiences = self.df_audiences.loc[self.df_audiences['type']
                                                        == required_type_audience]['audience'].to_list()
+            # Запасная аудитория
+            spare_aud = ''
+            for current_audience in self.audiences:
+                if current_audience not in possible_audiences:
+                    spare_aud = current_audience
+                    break
+
             # Перемешали, чтоб рассаживать в разные аудитории,
             # но исключить повторный выбор аудиторий за счет итерирования
             random.shuffle(possible_audiences)
-            for audience in self.schedule_dict[interval].keys():
-                if audience in possible_audiences:
-                    possible_audiences.remove(audience)
+
+            # Удаляем занятые аудитории
+            for current_audience in self.schedule_dict[current_interval].keys():
+                if current_audience in possible_audiences:
+                    possible_audiences.remove(current_audience)
+
             if possible_audiences:
                 return possible_audiences[0]
             else:
-                return ''
+                return spare_aud
 
         # Словарь {класс: смена}
         class_shift = dict(zip(self.classes, [1 for _ in self.classes]))
@@ -452,10 +462,8 @@ class Schedule:
         if self.second_shift:
 
             # Стандарт распределения классов на смены
-            shift_standart = {1: False, 2: True, 3: True, 4: True, 5: False, 6: True, 7: True, 8: True, 9: False,
-                              10: False, 11: False}
             for clas in class_shift.keys():
-                class_shift[clas] = shift_standart[int(clas[:-1])] + 1
+                class_shift[clas] = self.shift_standart[int(clas[:-1])] + 1
 
         for interval in self.intervals:
             teachers = dict()
@@ -501,8 +509,7 @@ class Schedule:
                                     fixed = True
                                 break
                         else:
-                            # Следующая ячейка пуста
-                            # Занимаем ее
+                            # Следующая ячейка пуста, занимаем ее
                             next_aud = find_free_audience(next_interval, dictionary['lesson'])
                             if not next_aud:
                                 # Если аудитория не нашлась
@@ -539,19 +546,63 @@ class Schedule:
         """
         # Оценки приспособленности поколений
         score = list()
+        # Замеры времени
+        time_points = tuple()
+        time_points = time_points + (time.perf_counter(),)
 
         # 1. Первая популяция составляется случайным образом.
         self.create_first_population_randomly()
         # 2. Проверка расписания на консистентность и корректировка.
         self.fix_schedule()
         # Оценка приспособленности и запись значений функции для каждой особи.
-        cur_score = self.classic_ga_target_function(50, 50)
+        cur_score = self.classic_ga_target_function(50, 30, 50, 10, 10)
         score.append(cur_score)
+        time_points = time_points + (time.perf_counter(),)
+        generation = 1
+
+        # Запись функций приспособленности в файл
+        f = open(f"score{str(generation)}.txt", "w")
+        for sc in score:
+            f.write(' '.join(list(map(str, sc))))
+            f.write('\r\n')
+        f.close()
+
+        #  Условие останова
+        while not (sum(score[-1]) == 0 or generation == 10 or (time_points[-1] - time_points[0]) > 60 * 5):
+            # Репродукция
+            self.classic_ga_krossingover(random.choice(self.classes), random.choice(self.classes))
+            self.classic_ga_inversion(random.choice(self.classes))
+            # Мутация
+            self.classic_ga_mutation(random.choice(self.classes))
+            # Исправить появившиеся накладки
+            self.fix_schedule()
+            # Пересчет целевой функции
+            cur_score = self.classic_ga_target_function(50, 30, 50, 10, 10)
+            score.append(cur_score)
+            # Замер времени
+            time_points = time_points + (time.perf_counter(),)
+            generation += 1
+
+            # Запись функций приспособленности в файл
+            f = open(f"score{str(generation)}.txt", "w")
+            for sc in score:
+                f.write(' '.join(list(map(str, sc))))
+                f.write('\r\n')
+            f.close()
 
         # Запись функций приспособленности в файл
         f = open("score.txt", "w")
         for sc in score:
             f.write(' '.join(list(map(str, sc))))
+            f.write('\r\n')
+        f.close()
+
+        # Запись замеров времени в файл
+        f = open("time.txt", "w")
+        for ind in range(len(time_points) - 1):
+            difference = round(time_points[ind + 1] - time_points[ind], 4)
+            f.write(str(difference))
+            f.write('\r\n')
         f.close()
 
         self.schedule_dict_to_table(self)
@@ -577,9 +628,9 @@ class Schedule:
         """
         self.create_first_population()
 
-        self.classic_ga_target_function()
+        self.classic_ga_target_function(50, 30, 50, 10, 10)
 
-    def class_window_finder(self) -> tuple:
+    def class_window_finder(self) -> set[tuple[int, int]]:
         """
         Возвращает количество окон по классам.
         Возвращаемое значение
@@ -597,11 +648,11 @@ class Schedule:
 
         for ind_class, school_class in enumerate(self.schedule_list[0]):
             # Предыдущий интервал занят
-            is_prev_lesson = False
+            # is_prev_lesson = False
             is_curr_lesson = False
             # Были ли сегодня уроки
             today_lessons = False
-            score = 0
+
             for ind_interval, interval in enumerate(self.schedule_list):
 
                 # Новый день или новая смена
@@ -632,7 +683,7 @@ class Schedule:
                     today_lessons = True
         return windows
 
-    def teacher_window_finder(self) -> tuple:
+    def teacher_window_finder(self) -> set[tuple[int, int]]:
         """
         Возвращает количество окон по учителям.
         Возвращаемое значение
@@ -644,11 +695,11 @@ class Schedule:
 
         for ind_teacher, teacher in enumerate(self.schedule_list_teacher[0]):
             # Предыдущий интервал занят
-            is_prev_lesson = False
+            # is_prev_lesson = False
             is_curr_lesson = False
             # Были ли сегодня уроки
             today_lessons = False
-            score = 0
+
             for ind_interval, interval in enumerate(self.schedule_list_teacher):
 
                 # Новый день или новая смена
@@ -678,7 +729,8 @@ class Schedule:
                     today_lessons = True
         return windows
 
-    def classic_ga_target_function(self, window_fine: int, teacher_fine: int) -> tuple:
+    def classic_ga_target_function(self, window_fine: int, teacher_fine: int, wishes_fine: int,
+                                   concentration_fine: int, distribution_fine: int) -> tuple:
         """
         Целевая функция, оценивающая расписание. Сохраняет преобразованное расписание
         в schedule_dict и schedule_list.
@@ -689,10 +741,10 @@ class Schedule:
             Оценка приспособленности
         """
         self.schedule_dict_to_table(self)
-        score = 0
         score_tuple = tuple()
 
         # Окна у классов
+        score = 0
         windows = self.class_window_finder()
         score += window_fine * len(windows)
         score_tuple = score_tuple + (score,)
@@ -703,22 +755,39 @@ class Schedule:
         score += teacher_fine * len(windows)
         score_tuple = score_tuple + (score,)
 
-        # Учитель не ведет >1 урока в одно время
-        # data_teachers = [['' for _ in self.teachers]
-        #                  for _ in range(len(self.schedule_dict))]
-        #
-        # for interval_i, interval in enumerate(self.schedule_dict):
-        #     for audience in self.schedule_dict[interval]:
-        #         school_class = self.schedule_dict[interval][audience]['class']
-        #         lesson = self.schedule_dict[interval][audience]['lesson']
-        #         teacher = self.teachers.index(self.schedule_dict[interval][audience]['teacher'])
-        #         item = str(lesson) + ' ' + str(school_class) + ' ' + str(audience)
-        #         if not data_teachers[interval_i][teacher]:
-        #             data_teachers[interval_i][teacher] = item
-        #         else:
-        #             # Учитель ведет >1 урока в одно время
-        #             score += teacher_fine
-        #             continue
+        # Пожелания учителей
+        score = 0
+        if not self.df_teachers_wishes.empty:
+            for index, row in self.df_teachers_wishes.iterrows():
+                if self.schedule_list_teacher[self.intervals.index(row['interval'])] \
+                        [self.teachers.index(row['teacher'])]:
+                    score += wishes_fine
+        score_tuple = score_tuple + (score,)
+
+        # Пик концентрации в течение дня приходится на 10-12 часов (2 и 3 уроки).
+        score = 0
+        count_less_per_day = len(self.intervals) // self.number_of_days_in_week
+        for class_index, school_class in enumerate(self.classes):
+            # Если смена первая
+            if not self.shift_standart[int(school_class[:-1])]:
+                for day in range(self.number_of_days_in_week):
+                    if not self.schedule_list[day * count_less_per_day + 1][class_index] \
+                            or not self.schedule_list[day * count_less_per_day + 2][class_index]:
+                        score += concentration_fine
+        score_tuple = score_tuple + (score,)
+
+        # Наибольший объем учебной нагрузки приходился на вторник и четверг.
+        score = 0
+        for class_index, school_class in enumerate(self.classes):
+            count_lessons = tuple()
+            for day in range(self.number_of_days_in_week):
+                count_lessons = count_lessons + \
+                                (sum([bool(self.schedule_list[day*count_less_per_day + lesson][class_index])
+                                      for lesson in range(count_less_per_day)]), )
+            # Если максимум уроков не стоят во вторник или четверг
+            if count_lessons.index(max(count_lessons)) not in (1, 3):
+                score += distribution_fine
+        score_tuple = score_tuple + (score,)
 
         # TODO: система проверок на существование расписания под требования пользователя
 
@@ -737,9 +806,23 @@ class Schedule:
             Хромосома, участок генов которой будет заменен на другой.
             Класс, расписание которого будет меняться.
         """
-        # Случайный интервал
-        start_interval, end_interval = random.choice(list(self.intervals)), random.choice(list(self.intervals))
-        start_interval_ind, end_interval_ind = self.intervals.index(start_interval), self.intervals.index(end_interval)
+        # Классы одной смены
+        shift = self.shift_standart[int(target_class1[:-1])]
+        while shift != self.shift_standart[int(target_class2[:-1])]:
+            target_class2 = random.choice(self.classes)
+
+        # Случайный интервал в течение дня попадающий в смену
+        day = random.choice(range(self.number_of_days_in_week))
+        lessons_per_day = len(self.intervals) // self.number_of_days_in_week
+        if shift:
+            end_of_the_shift = (lessons_per_day - 1) // 2
+        else:
+            end_of_the_shift = lessons_per_day
+        start_interval_ind = random.choice(
+            range(lessons_per_day * day + shift * end_of_the_shift, lessons_per_day * (day + 1)))
+        end_interval_ind = random.choice(
+            range(lessons_per_day * day + shift * end_of_the_shift, lessons_per_day * (day + 1)))
+        start_interval, end_interval = self.intervals[start_interval_ind], self.intervals[end_interval_ind]
         if start_interval_ind > end_interval_ind:
             start_interval, end_interval = end_interval, start_interval
             start_interval_ind, end_interval_ind = end_interval_ind, start_interval_ind
@@ -748,25 +831,27 @@ class Schedule:
             # Извлекаем ячейки для первого и второго класса
             sch_dict1, sch_dict2 = {}, {}
 
-            # TODO здесь могут быть накладки с кабинетами и учебным планом
-            for audience, dictionary in self.schedule_dict[start_interval].items():
+            # TODO здесь могут быть накладки с учебным планом
+            for audience, dictionary in self.schedule_dict[start_interval].copy().items():
 
                 # Извлекаем ячейку с target_class1
                 if dictionary['class'] == target_class1:
                     sch_dict1[audience] = dictionary
-                    del self.schedule_dict[start_interval][audience]
+                    if audience in self.schedule_dict[start_interval]:
+                        del self.schedule_dict[start_interval][audience]
                 # Извлекаем ячейку с target_class2
                 if dictionary['class'] == target_class2:
                     sch_dict2[audience] = dictionary
-                    del self.schedule_dict[start_interval][audience]
+                    if audience in self.schedule_dict[start_interval]:
+                        del self.schedule_dict[start_interval][audience]
 
             # Ставим ячейки в новое место в таблице
             if sch_dict1:
-                for audience, dictionary in sch_dict1:
+                for audience, dictionary in sch_dict1.copy().items():
                     sch_dict1[audience]['class'] = target_class2
                     self.schedule_dict[start_interval][audience] = sch_dict1[audience]
             if sch_dict2:
-                for audience, dictionary in sch_dict2:
+                for audience, dictionary in sch_dict2.copy().items():
                     sch_dict2[audience]['class'] = target_class1
                     self.schedule_dict[start_interval][audience] = sch_dict2[audience]
 
@@ -784,28 +869,65 @@ class Schedule:
             Хромосома, ген в которой подвергнется мутации.
             Класс, расписание которого будет меняться.
         """
-        # Начало участка обмена
-        start_interval = self.intervals[0]
-        start_interval_ind = 0
 
-        # Случайный интервал, конец участка обмена
-        end_interval = random.choice(list(self.intervals))
-        end_interval_ind = self.intervals.index(end_interval)
+        def find_free_audience(current_interval: str, lesson: str) -> str:
+            """
+            Функция возвращает аудиторию, которая свободная в interval и подходит для проведения урока lesson.
+            """
+            # Выбор типа аудитории
+            required_type_audience = self.df_audiences_lessons.loc[self.df_audiences_lessons['lesson']
+                                                                   == lesson].iloc[0]['type']
+            possible_audiences = self.df_audiences.loc[self.df_audiences['type']
+                                                       == required_type_audience]['audience'].to_list()
+            # Запасная аудитория
+            spare_aud = ''
+            for current_audience in self.audiences:
+                if current_audience not in possible_audiences:
+                    spare_aud = current_audience
+                    break
+
+            # Перемешали, чтоб рассаживать в разные аудитории,
+            # но исключить повторный выбор аудиторий за счет итерирования
+            random.shuffle(possible_audiences)
+
+            # Удаляем занятые аудитории
+            for current_audience in self.schedule_dict[current_interval].keys():
+                if current_audience in possible_audiences:
+                    possible_audiences.remove(current_audience)
+
+            if possible_audiences:
+                return possible_audiences[0]
+            else:
+                return spare_aud
+
+        shift = self.shift_standart[int(target_class[:-1])]
+
+        # Случайный интервал в течение дня попадающий в смену
+        day = random.choice(range(self.number_of_days_in_week))
+        lessons_per_day = len(self.intervals) // self.number_of_days_in_week
+        if shift:
+            end_of_the_shift = (lessons_per_day - 1) // 2
+        else:
+            end_of_the_shift = lessons_per_day
+        start_interval_ind = random.choice(
+            range(lessons_per_day * day + shift * end_of_the_shift, lessons_per_day * (day + 1)))
+        end_interval_ind = random.choice(
+            range(lessons_per_day * day + shift * end_of_the_shift, lessons_per_day * (day + 1)))
+        start_interval = self.intervals[start_interval_ind]
+        end_interval = self.intervals[end_interval_ind]
 
         # Обход с концов интервала инверсии к его середине
         while start_interval_ind < end_interval_ind:
             # Извлекаем ячейки правого и левого конца интервала
             start_dict, end_dict = {}, {}
 
-            # TODO здесь могут быть накладки с кабинетами
-
             # Извлекаем ячейку с target_class
-            for audience, dictionary in self.schedule_dict[start_interval].items():
+            for audience, dictionary in self.schedule_dict[start_interval].copy().items():
                 if dictionary['class'] == target_class:
                     start_dict[audience] = dictionary
                     del self.schedule_dict[start_interval][audience]
                     break
-            for audience, dictionary in self.schedule_dict[end_interval].items():
+            for audience, dictionary in self.schedule_dict[end_interval].copy().items():
                 if dictionary['class'] == target_class:
                     end_dict[audience] = dictionary
                     del self.schedule_dict[end_interval][audience]
@@ -813,14 +935,18 @@ class Schedule:
 
             # Ставим ячейку в новое место в таблице
             if start_dict:
-                for audience, dictionary in start_dict:
-                    self.schedule_dict[end_interval][audience] = dictionary
+                for audience, dictionary in start_dict.copy().items():
+                    self.schedule_dict[end_interval][
+                        find_free_audience(end_interval, dictionary['lesson'])] = dictionary
             if end_dict:
-                for audience, dictionary in end_dict:
-                    self.schedule_dict[start_interval][audience] = dictionary
+                for audience, dictionary in end_dict.copy().items():
+                    self.schedule_dict[start_interval][
+                        find_free_audience(start_interval, dictionary['lesson'])] = dictionary
 
             start_interval_ind += 1
             end_interval_ind -= 1
+            start_interval = self.intervals[start_interval_ind]
+            end_interval = self.intervals[end_interval_ind]
 
     def classic_ga_mutation(self, target_class: str) -> None:
         """
@@ -833,11 +959,11 @@ class Schedule:
             Класс, расписание которого будет меняться.
         """
         # Случайный интервал
-        interval = random.choice(list(self.schedule_dict.keys()))
+        interval = random.choice(self.intervals)
         mut = True  # Флаг
 
         while mut:
-            for audience, dictionary in self.schedule_dict[interval].items():
+            for audience, dictionary in self.schedule_dict[interval].copy().items():
                 if dictionary['class'] == target_class:
                     # Промутировать ген
                     self.schedule_dict[interval][audience]['teacher'] = random.choice(self.teachers)
@@ -848,7 +974,7 @@ class Schedule:
                     mut = False
                     break
             else:
-                interval = random.choice(list(self.schedule_dict.keys()))
+                interval = random.choice(self.intervals)
 
     @staticmethod
     def schedule_dict_to_table(self) -> None:

@@ -171,6 +171,13 @@ class Schedule:
             self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
         self.df_teachers = self.df_teachers.explode('lesson')
 
+        # Замена NaN в 2, 3, 4... строках для каждого класса
+        self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
+
+        # Замена NaN в 2, 3, 4... строках для каждого учителя, если введены пожелания
+        if not self.df_teachers_wishes.empty:
+            self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
+
         # Инициализация интервалов
         # Преобразование начала и конца уроков в списки
         end_interval = self.df_rings['end'].tolist()
@@ -187,7 +194,8 @@ class Schedule:
         self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
 
         # Результат
-        self.classic_ga()
+        # self.classic_ga()
+        self.modification_ga()
 
     def create_first_population(self) -> None:
         """
@@ -237,13 +245,6 @@ class Schedule:
 
         # Пустой шаблон расписания для заполнения
         self.schedule_dict = dict(zip(self.intervals, [{} for _ in range(len(self.intervals))]))
-
-        # Замена NaN в 2, 3, 4... строках для каждого класса
-        self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
-
-        # Замена NaN в 2, 3, 4... строках для каждого учителя, если введены пожелания
-        if not self.df_teachers_wishes.empty:
-            self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
 
         # Распределение классов и интервалов на смены
         count_less_per_day = len(self.intervals) // self.number_of_days_in_week
@@ -342,19 +343,6 @@ class Schedule:
         ---------------------
         None
         """
-
-        # Замена NaN в 2, 3, 4... строках для каждого класса
-        self.df_academic_plan['class'] = self.df_academic_plan['class'].fillna(method='ffill')
-
-        # Замена NaN в 2, 3, 4... строках для каждого учителя, если введены пожелания
-        if not self.df_teachers_wishes.empty:
-            self.df_teachers_wishes['teacher'] = self.df_teachers_wishes['teacher'].fillna(method='ffill')
-
-        # # Распаковка дата фрейма для учителей
-        # for i, row in self.df_teachers.iterrows():
-        #     self.df_teachers.iloc[i]['lesson'] = row['lesson'].split(', ')
-        # self.df_teachers = self.df_teachers.explode('lesson')
-
         for interval in self.intervals:
             for sch_class in self.classes:
                 # Случайный выбор аудитории
@@ -549,46 +537,48 @@ class Schedule:
         # Замеры времени
         time_points = tuple()
         time_points = time_points + (time.perf_counter(),)
+        stages_time_points = tuple()
+        stages_time_points = stages_time_points + (time.perf_counter(),)
 
         # 1. Первая популяция составляется случайным образом.
         self.create_first_population_randomly()
+        stages_time_points = stages_time_points + (time.perf_counter(),)
+
         # 2. Проверка расписания на консистентность и корректировка.
         self.fix_schedule()
+        stages_time_points = stages_time_points + (time.perf_counter(),)
+
         # Оценка приспособленности и запись значений функции для каждой особи.
         cur_score = self.classic_ga_target_function(50, 30, 50, 10, 10)
         score.append(cur_score)
+        stages_time_points = stages_time_points + (time.perf_counter(),)
+
         time_points = time_points + (time.perf_counter(),)
         generation = 1
-
-        # Запись функций приспособленности в файл
-        f = open(f"score{str(generation)}.txt", "w")
-        for sc in score:
-            f.write(' '.join(list(map(str, sc))))
-            f.write('\r\n')
-        f.close()
 
         #  Условие останова
         while not (sum(score[-1]) == 0 or generation == 10 or (time_points[-1] - time_points[0]) > 60 * 5):
             # Репродукция
             self.classic_ga_krossingover(random.choice(self.classes), random.choice(self.classes))
             self.classic_ga_inversion(random.choice(self.classes))
+            stages_time_points = stages_time_points + (time.perf_counter(),)
+
             # Мутация
             self.classic_ga_mutation(random.choice(self.classes))
+            stages_time_points = stages_time_points + (time.perf_counter(),)
+
             # Исправить появившиеся накладки
             self.fix_schedule()
+            stages_time_points = stages_time_points + (time.perf_counter(),)
+
             # Пересчет целевой функции
             cur_score = self.classic_ga_target_function(50, 30, 50, 10, 10)
             score.append(cur_score)
+            stages_time_points = stages_time_points + (time.perf_counter(),)
+
             # Замер времени
             time_points = time_points + (time.perf_counter(),)
             generation += 1
-
-            # Запись функций приспособленности в файл
-            f = open(f"score{str(generation)}.txt", "w")
-            for sc in score:
-                f.write(' '.join(list(map(str, sc))))
-                f.write('\r\n')
-            f.close()
 
         # Запись функций приспособленности в файл
         f = open("score.txt", "w")
@@ -605,6 +595,14 @@ class Schedule:
             f.write('\r\n')
         f.close()
 
+        f = open("stages_time.txt", "w")
+        for ind in range(len(stages_time_points) - 1):
+            difference = round(stages_time_points[ind + 1] - stages_time_points[ind], 4)
+            f.write(str(difference))
+            f.write('\r\n')
+        f.close()
+
+        # TODO вынести замеры времени в функцию
         self.schedule_dict_to_table(self)
 
     def modification_ga(self) -> None:
@@ -626,9 +624,371 @@ class Schedule:
         ---------------------
         None
         """
-        self.create_first_population()
+        # Оценки приспособленности поколений
+        score = list()
+        # Замеры времени между поколениями
+        time_points = tuple()
+        time_points = time_points + (time.perf_counter(),)
+        # Замеры времени между этапами ГА
+        stages_time_points = tuple()
+        stages_time_points = stages_time_points + (time.perf_counter(),)
 
-        self.classic_ga_target_function(50, 30, 50, 10, 10)
+        # 1. Первая популяция.
+        self.create_first_population()
+        stages_time_points = stages_time_points + (time.perf_counter(),)
+
+        # 2. Проверка расписания на консистентность и корректировка.
+        self.fix_teacher_inconsistencies()
+        stages_time_points = stages_time_points + (time.perf_counter(),)
+
+        # Оценка приспособленности и запись значений функции для каждой особи.
+        # Этот же этап репродукции.
+        cur_score = self.modification_ga_target_function(50, 30, 50, 10, 10)
+        score.append(cur_score)
+        stages_time_points = stages_time_points + (time.perf_counter(),)
+
+        time_points = time_points + (time.perf_counter(),)
+        generation = 1
+
+        # Запись функций приспособленности в файл
+        f = open(f"score{str(generation)}.txt", "w")
+        for sc in score:
+            f.write(' '.join(list(map(str, sc))))
+            f.write('\r\n')
+        f.close()
+
+        #  Условие останова
+        while not (sum(score[-1]) == 0 or generation == 10 or (time_points[-1] - time_points[0]) > 60 * 5):
+            # Исправить появившиеся накладки
+            self.fix_teacher_inconsistencies()
+            stages_time_points = stages_time_points + (time.perf_counter(),)
+
+            # Пересчет целевой функции
+            cur_score = self.modification_ga_target_function(50, 30, 50, 10, 10)
+            score.append(cur_score)
+            stages_time_points = stages_time_points + (time.perf_counter(),)
+
+            # Замер времени
+            time_points = time_points + (time.perf_counter(),)
+            generation += 1
+
+        # Запись функций приспособленности в файл
+        f = open(f"score.txt", "w")
+        for sc in score:
+            f.write(' '.join(list(map(str, sc))))
+            f.write('\r\n')
+        f.close()
+
+
+        # Запись замеров времени в файл
+        f = open("time.txt", "w")
+        for ind in range(len(time_points) - 1):
+            difference = round(time_points[ind + 1] - time_points[ind], 4)
+            f.write(str(difference))
+            f.write('\r\n')
+        f.close()
+
+        f = open("stages_time.txt", "w")
+        for ind in range(len(stages_time_points) - 1):
+            difference = round(stages_time_points[ind + 1] - stages_time_points[ind], 4)
+            f.write(str(difference))
+            f.write('\r\n')
+        f.close()
+
+        # TODO вынести замеры времени в функцию
+        self.schedule_dict_to_table(self)
+
+    def point_mutation_exchange(self, interval: int, school_class: str, completeness_of_second_gene: bool,
+                                single_day: bool, other_teacher: bool, second_gene_is_extreme: bool) -> bool:
+        # TODO добавить документацию
+        def find_free_audience(current_interval: str, lesson: str) -> str:
+            """
+            Функция возвращает аудиторию, которая свободная в interval и подходит для проведения урока lesson.
+            """
+            # Выбор типа аудитории
+            required_type_audience = self.df_audiences_lessons.loc[self.df_audiences_lessons['lesson']
+                                                                   == lesson].iloc[0]['type']
+            possible_audiences = self.df_audiences.loc[self.df_audiences['type']
+                                                       == required_type_audience]['audience'].to_list()
+            # Запасная аудитория
+            spare_aud = ''
+            for current_audience in self.audiences:
+                if current_audience not in possible_audiences:
+                    spare_aud = current_audience
+                    break
+
+            # Перемешали, чтоб рассаживать в разные аудитории,
+            # но исключить повторный выбор аудиторий за счет итерирования
+            random.shuffle(possible_audiences)
+
+            # Удаляем занятые аудитории
+            for current_audience in self.schedule_dict[current_interval].keys():
+                if current_audience in possible_audiences:
+                    possible_audiences.remove(current_audience)
+
+            if possible_audiences:
+                return possible_audiences[0]
+            else:
+                return spare_aud
+
+        def gene_search(interval: int, first_class: str, completeness_of_second_gene: bool, current_day: bool,
+                        other_teacher: bool, second_gene_is_extreme: bool) -> tuple:
+            # Кандидаты на второй ген
+            genes = tuple()
+
+            # Извлекаем день из интервала
+            count_less_per_day = len(self.intervals) // self.number_of_days_in_week
+            end_of_the_shift = count_less_per_day
+            day = interval // count_less_per_day
+            # Узнаем смену класса: True = вторая
+            shift = self.shift_standart[int(first_class[:-1])]
+            if self.second_shift:
+                # Конец первой смены
+                end_of_the_shift = (end_of_the_shift - 1) // 2
+            if current_day:
+
+                # Проходим по дню
+                for interv in self.intervals[day * count_less_per_day + shift * (end_of_the_shift + 1): \
+                        (day + 1) * count_less_per_day]:
+                    teachers = tuple()
+
+                    # Крайний ли ген
+                    if second_gene_is_extreme:
+                        # Первый
+                        extreme_flag1 = True
+                        for time_int in self.intervals[day * count_less_per_day + shift * (end_of_the_shift + 1): \
+                                self.intervals.index(interv)]:
+                            if bool(self.schedule_list[self.intervals.index(time_int)][
+                                        self.classes.index(first_class)]):
+                                extreme_flag1 = False
+                                break
+                        if not bool(self.schedule_list[self.intervals.index(interv)][self.classes.index(first_class)]):
+                            extreme_flag1 = False
+                            break
+                        # Последний
+                        extreme_flag2 = True
+                        if not bool(self.schedule_list[self.intervals.index(interv)][self.classes.index(first_class)]):
+                            extreme_flag2 = False
+                            break
+                        if bool(self.schedule_list[(self.intervals.index(interv) + 1) % len(self.intervals)]
+                                [self.classes.index(first_class)]):
+                            extreme_flag2 = False
+                            break
+                    if second_gene_is_extreme and not (extreme_flag1 or extreme_flag2):
+                        continue
+
+                    for audience, dictionary in self.schedule_dict[interv].copy().items():
+                        teachers = teachers + (dictionary['teacher'],)
+                        if dictionary['class'] == first_class and bool(dictionary) == completeness_of_second_gene:
+                            if 'teacher' in first_gene:
+                                if not completeness_of_second_gene or other_teacher != (
+                                        dictionary['teacher'] != first_gene['teacher']):
+                                    # Первое условие выполнено (ген пустой), тогда сравнивать учителей не надо
+                                    # Другой интервал
+                                    break
+                            # Проверка на консистентность по учителям
+                            # Учитель первого интервала
+                            if bool(first_gene):
+                                if first_gene['teacher'] in teachers:
+                                    # Другой интервал
+                                    break
+                            # Если второй ген должен быть полный
+                            if completeness_of_second_gene:
+                                # Учитель второго интервала
+                                if dictionary['teacher'] in teachers_first_interval:
+                                    # Другой интервал
+                                    break
+                                genes = genes + ({'interval': interv, 'audience': audience, 'class': school_class,
+                                                  'lesson': dictionary['lesson'], 'teacher': dictionary['teacher']},)
+                            else:
+                                genes = genes + ({'interval': interv},)
+
+
+            else:
+                # Проходим по дням
+                for interv in self.intervals:
+                    teachers = tuple()
+                    # Несоответствие смене
+                    if ((self.intervals.index(interv) % count_less_per_day) > end_of_the_shift) != shift:
+                        continue
+                    # Крайний ли ген
+                    if second_gene_is_extreme:
+                        # Первый
+                        extreme_flag1 = True
+                        for time_int in self.intervals[day * count_less_per_day + shift * (end_of_the_shift + 1): \
+                                self.intervals.index(interv)]:
+                            if bool(self.schedule_list[self.intervals.index(time_int)][
+                                        self.classes.index(first_class)]):
+                                extreme_flag1 = False
+                                break
+                        if not bool(self.schedule_list[self.intervals.index(interv)][self.classes.index(first_class)]):
+                            extreme_flag1 = False
+                            break
+                            # Последний
+                        extreme_flag2 = True
+                        if not bool(self.schedule_list[self.intervals.index(interv)][self.classes.index(first_class)]):
+                            extreme_flag2 = False
+                            break
+                        if bool(self.schedule_list[(self.intervals.index(interv) + 1) % len(self.intervals)][
+                                    self.classes.index(first_class)]):
+                            extreme_flag2 = False
+                            break
+                    if second_gene_is_extreme and not (extreme_flag1 or extreme_flag2):
+                        continue
+                    for audience, dictionary in self.schedule_dict[interv].copy().items():
+                        teachers = teachers + (dictionary['teacher'],)
+                        if dictionary['class'] == first_class and bool(dictionary) == completeness_of_second_gene:
+                            if 'teacher' in first_gene:
+                                if not completeness_of_second_gene or other_teacher != (
+                                        dictionary['teacher'] != first_gene['teacher']):
+                                    # Первое условие выполнено (ген пустой), тогда сравнивать учителей не надо
+                                    # Другой интервал
+                                    break
+                            # Проверка на консистентность по учителям
+                            # Учитель первого интервала
+                            if bool(first_gene):
+                                if first_gene['teacher'] in teachers:
+                                    # Другой интервал
+                                    break
+                            if completeness_of_second_gene:
+                                # Учитель второго интервала
+                                if dictionary['teacher'] in teachers_first_interval:
+                                    # Другой интервал
+                                    break
+                                genes = genes + ({'interval': interv, 'audience': audience, 'class': school_class,
+                                                  'lesson': dictionary['lesson'], 'teacher': dictionary['teacher']},)
+                            else:
+                                genes = genes + ({'interval': interv},)
+            return genes
+
+        first_gene = dict()
+        interval = self.intervals[interval]
+        # Найти данные по первому гену
+        teachers_first_interval = tuple()
+        for audience, dictionary in self.schedule_dict[interval].copy().items():
+            teachers_first_interval = teachers_first_interval + (dictionary['teacher'],)
+            if dictionary['class'] == school_class:
+                first_gene['interval'] = interval
+                first_gene['audience'] = audience
+                first_gene['teacher'] = dictionary['teacher']
+                first_gene['lesson'] = dictionary['lesson']
+        second_genes = gene_search(self.intervals.index(interval), school_class, completeness_of_second_gene, single_day, other_teacher,
+                                   second_gene_is_extreme)
+        if second_genes:
+            second_gene = random.choice(second_genes)
+            # Пустые ячейки
+
+            if bool(first_gene):
+                # Удаляем старый ген
+                if first_gene['audience'] in self.schedule_dict[interval]:
+                    del self.schedule_dict[interval][first_gene['audience']]
+                # Ставим его на новое место
+                self.schedule_dict[second_gene['interval']][find_free_audience(second_gene['interval'],
+                                                                               first_gene['lesson'])] \
+                    = {'class': school_class, 'lesson': first_gene['lesson'], 'teacher': first_gene['teacher']}
+
+            if bool(second_gene):
+                # Удаляем старый ген
+                if second_gene['audience'] in self.schedule_dict[second_gene['interval']]:
+                    del self.schedule_dict[second_gene['interval']][second_gene['audience']]
+                # Ставим его на новое место
+                self.schedule_dict[interval][find_free_audience(interval, second_gene['lesson'])] = \
+                    {'class': second_gene['class'], 'lesson': second_gene['lesson'], 'teacher': second_gene['teacher']}
+            return True
+
+        else:
+            return False
+
+    def modification_ga_target_function(self, window_fine: int, teacher_fine: int, wishes_fine: int,
+                                        concentration_fine: int, distribution_fine: int) -> tuple:
+        # TODO исправить документацию
+        """
+        Целевая функция, оценивающая расписание. Сохраняет преобразованное расписание
+        в schedule_dict и schedule_list.
+
+        Возвращаемое значение
+        ---------------------
+        int
+            Оценка приспособленности
+        """
+        self.schedule_dict_to_table(self)
+        score_tuple = tuple()
+
+        # Окна у классов
+        score = 0
+        windows = self.class_window_finder()
+        for window in windows:
+            changed = self.point_mutation_exchange(window[0], self.classes[window[1]], True, False,
+                                                   True, True)
+            # Инверсия для длинных окон
+            # Мутация для одиночных окон
+
+            score += window_fine * (1 - int(changed))
+        score_tuple = score_tuple + (score,)
+
+        # Окна у учителей
+        score = 0
+        windows = self.teacher_window_finder()
+        for window in windows:
+            # Мутация-обмен
+            changed = self.point_mutation_exchange(window[0], self.classes[window[1]], True, False,
+                                                   False, True)
+            score += teacher_fine * (1 - int(changed))
+        score_tuple = score_tuple + (score,)
+
+        # Пожелания учителей
+        score = 0
+        if not self.df_teachers_wishes.empty:
+            for index, row in self.df_teachers_wishes.iterrows():
+                if self.schedule_list_teacher[self.intervals.index(row['interval'])] \
+                        [self.teachers.index(row['teacher'])]:
+                    class_index = None
+                    for aud, dict in self.schedule_dict[row['interval']].copy().items():
+                        if dict['teacher'] == row['teacher']:
+                            class_index = self.classes.index(dict['class'])
+                    # Мутация
+                    changed = self.point_mutation_exchange(self.intervals.index(row['interval']),
+                                                           self.classes[class_index], False, False, True, False)
+                    score += wishes_fine * (1 - int(changed))
+        score_tuple = score_tuple + (score,)
+
+        # Пик концентрации в течение дня приходится на 10-12 часов (2 и 3 уроки).
+        score = 0
+        count_less_per_day = len(self.intervals) // self.number_of_days_in_week
+        for class_index, school_class in enumerate(self.classes):
+            # Если смена первая
+            if not self.shift_standart[int(school_class[:-1])]:
+                for day in range(self.number_of_days_in_week):
+                    if not self.schedule_list[day * count_less_per_day + 1][class_index] \
+                            or not self.schedule_list[day * count_less_per_day + 2][class_index]:
+                        # Мутация-обмен
+                        changed = self.point_mutation_exchange(day * count_less_per_day + 1, school_class,
+                                                               False, False, True, True)
+                        score += concentration_fine * (1 - int(changed))
+                        changed = self.point_mutation_exchange(day * count_less_per_day + 2, school_class, False,
+                                                               False, True, True)
+                        score += concentration_fine * (1 - int(changed))
+        score_tuple = score_tuple + (score,)
+
+        # Наибольший объем учебной нагрузки приходился на вторник и четверг.
+        score = 0
+        for class_index, school_class in enumerate(self.classes):
+            count_lessons = tuple()
+            for day in range(self.number_of_days_in_week):
+                count_lessons = count_lessons + \
+                                (sum([bool(self.schedule_list[day * count_less_per_day + lesson][class_index])
+                                      for lesson in range(count_less_per_day)]),)
+            # Если максимум уроков не стоят во вторник или четверг
+            if count_lessons.index(max(count_lessons)) not in (1, 3):
+                # Кроссинговер
+                # TODO кроссинговер
+
+                score += distribution_fine
+        score_tuple = score_tuple + (score,)
+
+        # TODO: система проверок на существование расписания под требования пользователя
+
+        return score_tuple
 
     def class_window_finder(self) -> set[tuple[int, int]]:
         """
@@ -722,7 +1082,9 @@ class Schedule:
                 # Урока не было, сейчас есть, но уроки уже были сегодня
                 elif today_lessons:
                     # Окно
-                    windows.add((ind_interval - 1, ind_teacher))
+                    for aud, dict in self.schedule_dict[self.intervals[ind_interval]].copy().items():
+                        if dict['teacher'] == teacher:
+                            windows.add((ind_interval - 1, self.classes.index(dict['class'])))
 
                 # Уроков не было, но начались
                 else:
@@ -782,8 +1144,8 @@ class Schedule:
             count_lessons = tuple()
             for day in range(self.number_of_days_in_week):
                 count_lessons = count_lessons + \
-                                (sum([bool(self.schedule_list[day*count_less_per_day + lesson][class_index])
-                                      for lesson in range(count_less_per_day)]), )
+                                (sum([bool(self.schedule_list[day * count_less_per_day + lesson][class_index])
+                                      for lesson in range(count_less_per_day)]),)
             # Если максимум уроков не стоят во вторник или четверг
             if count_lessons.index(max(count_lessons)) not in (1, 3):
                 score += distribution_fine

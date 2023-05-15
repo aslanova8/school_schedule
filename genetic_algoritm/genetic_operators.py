@@ -725,6 +725,12 @@ class Schedule:
         def find_free_audience(current_interval: str, lesson: str) -> str:
             """
             Функция возвращает аудиторию, которая свободная в interval и подходит для проведения урока lesson.
+             Параметры
+             ---------
+             current_interval : str
+                Инвервал, в котором ищется аудитория.
+             lesson : str
+                Урок, для которого ищется аудитория.
             """
             # Выбор типа аудитории
             required_type_audience = self.df_audiences_lessons.loc[self.df_audiences_lessons['lesson']
@@ -754,6 +760,28 @@ class Schedule:
 
         def gene_search(interval: int, first_class: str, completeness_of_second_gene: bool, current_day: bool,
                         other_teacher: bool, second_gene_is_extreme: bool) -> tuple:
+            """
+             Поиск гена, которых подходит для мутации - обмена.
+
+            Параметры
+            ---------
+            interval : int
+                Интервал первого гена.
+            first_class : str
+                Класс первого гена.
+            completeness_of_second_gene : bool
+                Полнота второго гена, участвующего в мутации.
+                Пустой, когда учителя хотят не работать в этот промежуток.
+                Полный, когда необходимо закрыть окно в расписании.
+            single_day : bool
+                Мутация в рамках одного дня.
+            other_teacher : bool
+                Обмен ячеек с разными учителями.
+                True, когда закрываются окна учителей.
+            second_gene_is_extreme : bool
+                Второй ген - крайний.
+                Чтобы не образовывать окна.
+            """
             # Кандидаты на второй ген
             genes = tuple()
 
@@ -916,7 +944,6 @@ class Schedule:
                 self.schedule_dict[interval][find_free_audience(interval, second_gene['lesson'])] = \
                     {'class': second_gene['class'], 'lesson': second_gene['lesson'], 'teacher': second_gene['teacher']}
             return True
-
         else:
             return False
 
@@ -924,6 +951,7 @@ class Schedule:
                                         concentration_fine: int, distribution_fine: int) -> tuple:
         """
         Целевая функция, оценивающая расписание. Преобразует расписание ситуативно в зависимости от возникшей проблемы.
+
         Параметры
         ---------
         window_fine : int
@@ -1023,7 +1051,8 @@ class Schedule:
 
     def class_window_finder(self) -> set[tuple[int, int]]:
         """
-        Возвращает количество окон по классам.
+        Возвращает окна по классам.
+
         Возвращаемое значение
         ---------------------
         tuple
@@ -1076,7 +1105,8 @@ class Schedule:
 
     def teacher_window_finder(self) -> set[tuple[int, int]]:
         """
-        Возвращает количество окон по учителям.
+        Возвращает окона по учителям.
+
         Возвращаемое значение
         ---------------------
         tuple
@@ -1130,8 +1160,8 @@ class Schedule:
 
         Возвращаемое значение
         ---------------------
-        int
-            Оценка приспособленности
+        tuple
+            Оценки приспособленности по каждому параметру
         """
         self.schedule_dict_to_table(self)
         score_tuple = tuple()
